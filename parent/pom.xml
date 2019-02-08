@@ -58,6 +58,7 @@
     <version.slf4j>1.7.25</version.slf4j>
     <version.snakeyaml>1.23</version.snakeyaml>
     <version.streamex>0.6.8</version.streamex>
+    <version.testcontainers>1.10.6</version.testcontainers>
     <version.toml>0.7.2</version.toml>
 
     <!-- maven plugins -->
@@ -403,6 +404,18 @@
         <groupId>com.carrotsearch</groupId>
         <artifactId>hppc</artifactId>
         <version>${version.hppc}</version>
+      </dependency>
+
+      <dependency>
+        <groupId>org.testcontainers</groupId>
+        <artifactId>testcontainers</artifactId>
+        <version>${version.testcontainers}</version>
+      </dependency>
+
+      <dependency>
+        <groupId>org.testcontainers</groupId>
+        <artifactId>elasticsearch</artifactId>
+        <version>${version.testcontainers}</version>
       </dependency>
 
     </dependencies>

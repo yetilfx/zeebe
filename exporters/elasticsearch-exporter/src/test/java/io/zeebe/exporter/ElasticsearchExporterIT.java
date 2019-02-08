@@ -15,8 +15,8 @@
  */
 package io.zeebe.exporter;
 
-import static org.assertj.core.api.AssertionsForClassTypes.assertThat;
-import static org.assertj.core.api.AssertionsForInterfaceTypes.assertThat;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.carrotsearch.hppc.cursors.ObjectCursor;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -34,29 +34,31 @@ import org.elasticsearch.common.collect.ImmutableOpenMap;
 import org.elasticsearch.common.settings.Settings;
 import org.junit.After;
 import org.junit.Before;
-import org.junit.Rule;
 import org.junit.Test;
 import org.slf4j.Logger;
+import org.testcontainers.elasticsearch.ElasticsearchContainer;
 
 public class ElasticsearchExporterIT {
-
+  private static final String ES_VERSION = "6.6.0";
+  private static final String ES_IMAGE = "docker.elastic.co/elasticsearch/elasticsearch";
   private static final ObjectMapper MAPPER = new ObjectMapper();
 
-  @Rule public final ExporterIntegrationRule exporterBrokerRule = new ExporterIntegrationRule();
+  private ElasticsearchContainer container =
+      new ElasticsearchContainer(String.format("%s:%s", ES_IMAGE, ES_VERSION))
+          .withEnv("xpack.license.self_generated.type", "trial")
+          .withEnv("xpack.security.enabled", "true");
 
+  private final ExporterIntegrationRule exporterBrokerRule = new ExporterIntegrationRule();
   private ElasticsearchExporterConfiguration configuration;
   private ElasticsearchTestClient esClient;
 
   @Before
-  public void setUp() {
-    configuration =
-        exporterBrokerRule.getExporterConfiguration(
-            "elasticsearch", ElasticsearchExporterConfiguration.class);
-    esClient = createElasticsearchClient(configuration);
-  }
+  public void setUp() {}
 
   @After
   public void tearDown() throws IOException {
+    exporterBrokerRule.stop();
+
     if (esClient != null) {
       esClient.close();
       esClient = null;
@@ -65,6 +67,13 @@ public class ElasticsearchExporterIT {
 
   @Test
   public void shouldExportRecords() {
+    // given
+    container.start();
+    configuration = getDefaultConfiguration();
+    exporterBrokerRule.configure("es", ElasticsearchExporter.class, configuration);
+    exporterBrokerRule.start();
+    esClient = createElasticsearchClient(configuration);
+
     // when
     exporterBrokerRule.performSampleWorkload();
 
@@ -74,6 +83,38 @@ public class ElasticsearchExporterIT {
     assertIndexSettings();
 
     // assert all records which where recorded during the tests where exported
+    exporterBrokerRule.visitExportedRecords(
+        r -> {
+          if (configuration.shouldIndexRecord(r)) {
+            assertRecordExported(r);
+          }
+        });
+  }
+
+  @Test
+  public void shouldUseBasicAuthenticationIfConfigured() {
+    // given
+    final String password = "1234567";
+    container.withEnv("ELASTIC_PASSWORD", password).start();
+    configuration = getDefaultConfiguration();
+
+    // when
+    esClient = createElasticsearchClient(configuration);
+
+    // then
+    assertThatThrownBy(() -> esClient.client.ping(RequestOptions.DEFAULT)).isNotNull();
+
+    // when
+    configuration.authentication.username = "elastic";
+    configuration.authentication.password = password;
+    esClient = createElasticsearchClient(configuration);
+
+    // when
+    exporterBrokerRule.configure("es", ElasticsearchExporter.class, configuration);
+    exporterBrokerRule.start();
+    exporterBrokerRule.performSampleWorkload();
+
+    // then
     exporterBrokerRule.visitExportedRecords(
         r -> {
           if (configuration.shouldIndexRecord(r)) {
@@ -126,6 +167,34 @@ public class ElasticsearchExporterIT {
     }
 
     return MAPPER.convertValue(jsonNode, Map.class);
+  }
+
+  public ElasticsearchExporterConfiguration getDefaultConfiguration() {
+    final ElasticsearchExporterConfiguration configuration =
+        new ElasticsearchExporterConfiguration();
+
+    configuration.url = String.format("http://%s", container.getHttpHostAddress());
+
+    configuration.bulk.delay = 1;
+    configuration.bulk.size = 1;
+
+    configuration.index.prefix = "test-record";
+    configuration.index.createTemplate = true;
+    configuration.index.command = true;
+    configuration.index.event = true;
+    configuration.index.rejection = true;
+    configuration.index.deployment = true;
+    configuration.index.incident = true;
+    configuration.index.job = true;
+    configuration.index.jobBatch = true;
+    configuration.index.message = true;
+    configuration.index.messageSubscription = true;
+    configuration.index.raft = true;
+    configuration.index.variable = true;
+    configuration.index.workflowInstance = true;
+    configuration.index.workflowInstanceSubscription = true;
+
+    return configuration;
   }
 
   public static class ElasticsearchTestClient extends ElasticsearchClient {
