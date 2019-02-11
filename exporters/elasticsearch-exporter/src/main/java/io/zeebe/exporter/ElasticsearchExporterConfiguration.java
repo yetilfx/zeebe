@@ -28,6 +28,7 @@ public class ElasticsearchExporterConfiguration {
   public IndexConfiguration index = new IndexConfiguration();
   public BulkConfiguration bulk = new BulkConfiguration();
   public AuthenticationConfiguration authentication = new AuthenticationConfiguration();
+  public SslConfiguration ssl = new SslConfiguration();
 
   @Override
   public String toString() {
@@ -129,6 +130,29 @@ public class ElasticsearchExporterConfiguration {
     @Override
     public String toString() {
       return "AuthenticationConfiguration{" + "username='" + username + '\'' + '}';
+    }
+  }
+
+  public static class SslConfiguration {
+
+    // client PKCS12 key store
+    public String keyStore;
+    // client key password (optional)
+    public String keyPassword;
+    // client key store password (optional)
+    public String keyStorePassword;
+
+    // client PKCS12 trustStore;
+    public String trustStore;
+    // client trust store password (optional)
+    public String trustStorePassword;
+
+    public boolean isPresent() {
+      return isPkcs12();
+    }
+
+    public boolean isPkcs12() {
+      return keyStore != null && !keyStore.isEmpty();
     }
   }
 

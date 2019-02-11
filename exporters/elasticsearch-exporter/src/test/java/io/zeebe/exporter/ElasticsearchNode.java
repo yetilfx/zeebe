@@ -18,11 +18,15 @@ package io.zeebe.exporter;
 import static java.net.HttpURLConnection.HTTP_OK;
 import static java.net.HttpURLConnection.HTTP_UNAUTHORIZED;
 
+import io.zeebe.exporter.ssl.DefaultKeyManagerProvider;
+import io.zeebe.exporter.ssl.DefaultTrustManagerProvider;
+import io.zeebe.exporter.ssl.KeyManagerProvider;
 import io.zeebe.exporter.ssl.SSLContextFactory;
+import io.zeebe.exporter.ssl.TrustManagerProvider;
+import io.zeebe.exporter.ssl.pkcs12.Pkcs12KeyManagerProvider;
+import io.zeebe.exporter.ssl.pkcs12.Pkcs12KeyStoreProvider;
+import io.zeebe.exporter.ssl.pkcs12.Pkcs12TrustManagerProvider;
 import java.io.IOException;
-import java.security.KeyManagementException;
-import java.security.KeyStoreException;
-import java.security.NoSuchAlgorithmException;
 import java.time.Duration;
 import javax.net.ssl.HttpsURLConnection;
 import javax.net.ssl.SSLContext;
@@ -31,7 +35,6 @@ import org.apache.http.auth.AuthScope;
 import org.apache.http.auth.UsernamePasswordCredentials;
 import org.apache.http.client.CredentialsProvider;
 import org.apache.http.conn.ssl.NoopHostnameVerifier;
-import org.apache.http.conn.ssl.TrustAllStrategy;
 import org.apache.http.impl.client.BasicCredentialsProvider;
 import org.apache.http.impl.nio.client.HttpAsyncClientBuilder;
 import org.elasticsearch.client.RestClient;
@@ -57,7 +60,8 @@ public class ElasticsearchNode extends ElasticsearchContainer {
   private String password;
 
   private boolean isSslEnabled;
-  private String certificate;
+  private KeyManagerProvider keyManagerProvider = new DefaultKeyManagerProvider();
+  private TrustManagerProvider trustManagerProvider = new DefaultTrustManagerProvider();
 
   private RestHighLevelClient client;
 
@@ -107,20 +111,53 @@ public class ElasticsearchNode extends ElasticsearchContainer {
     return this;
   }
 
-  public ElasticsearchContainer withSsl(String pathToCertificate, boolean shouldGloballyTrust) {
-    final String containerPath = "/usr/share/elasticsearch/config/certs/elastic-certificates.p12";
+  /**
+   * Sets the server keystore, that is, the store containing the server certificate and certificate
+   * authorities. Also implicitly trusts it for as long as the JVM is alive.
+   */
+  public ElasticsearchNode withKeyStore(String keyStore, String password) {
+    final String containerPath = "/usr/share/elasticsearch/config/certs/keyStore.p12";
     enableXpack()
         .withEnv("xpack.security.http.ssl.enabled", "true")
         .withEnv("xpack.security.http.ssl.keystore.path", containerPath)
-        .withEnv("xpack.security.http.ssl.truststore.path", containerPath)
         .withClasspathResourceMapping(
-            pathToCertificate, containerPath, BindMode.READ_ONLY, SelinuxContext.SHARED);
+          keyStore, containerPath, BindMode.READ_ONLY, SelinuxContext.SHARED);
+
+    if (password != null) {
+      withEnv("xpack.security.http.ssl.keystore.password", password);
+    }
+
     isSslEnabled = true;
     waitStrategy.usingTls();
+    trustManagerProvider = new Pkcs12TrustManagerProvider(
+      new Pkcs12KeyStoreProvider(keyStore, password));
+    configureHttpWaitStrategyForSsl();
 
-    if (shouldGloballyTrust) {
-      trustCertificate(pathToCertificate);
+    return this;
+  }
+
+  /**
+   * Sets the server trust store, that is, the store containing the client certificate authority.
+   */
+  public ElasticsearchNode withTrustStore(String trustStore, String password) {
+    final String containerPath = "/usr/share/elasticsearch/config/certs/trustStore.p12";
+    enableXpack()
+      .withEnv("xpack.security.http.ssl.enabled", "true")
+      .withEnv("xpack.security.http.ssl.truststore.path", containerPath)
+      .withClasspathResourceMapping(
+        trustStore, containerPath, BindMode.READ_ONLY, SelinuxContext.SHARED);
+
+    if (password != null) {
+      withEnv("xpack.security.http.ssl.truststore.password", password);
     }
+
+    withEnv("ES_JAVA_OPTS", "-Djavax.net.debug=ssl");
+
+    isSslEnabled = true;
+    waitStrategy.usingTls();
+    keyManagerProvider = new Pkcs12KeyManagerProvider(
+      new Pkcs12KeyStoreProvider(trustStore, password));
+    configureHttpWaitStrategyForSsl();
 
     return this;
   }
@@ -171,25 +208,12 @@ public class ElasticsearchNode extends ElasticsearchContainer {
     config.setDefaultCredentialsProvider(credentialsProvider);
   }
 
-  /**
-   * Creates a new {@link SSLContext} which trusts all certificates, then sets it as a the default
-   * for both {@link SSLContext} and {@link HttpsURLConnection} (the latter is needed for {@link
-   * HttpWaitStrategy} to accept our self signed cert.
-   *
-   * @param pathToCertificate currently ignored, but hopefully used in the future
-   */
-  private void trustCertificate(String pathToCertificate) {
-    try {
-      final SSLContext sslContext =
-          SSLContextFactory.newContext("SSL", null, TrustAllStrategy.INSTANCE);
-      SSLContext.setDefault(sslContext);
+  private void configureHttpWaitStrategyForSsl() {
+    final SSLContext sslContext = new SSLContextFactory("TLS")
+      .newContext(keyManagerProvider, trustManagerProvider);
 
-      // required for the HttpWaitStrategy
-      HttpsURLConnection.setDefaultHostnameVerifier(NoopHostnameVerifier.INSTANCE);
-      HttpsURLConnection.setDefaultSSLSocketFactory(sslContext.getSocketFactory());
-    } catch (NoSuchAlgorithmException | KeyStoreException | KeyManagementException e) {
-      throw new IllegalStateException(
-          "Failed to implicitly trust given certificate, no request will be possible", e);
-    }
+    // required for the HttpWaitStrategy
+    HttpsURLConnection.setDefaultHostnameVerifier(NoopHostnameVerifier.INSTANCE);
+    HttpsURLConnection.setDefaultSSLSocketFactory(sslContext.getSocketFactory());
   }
 }

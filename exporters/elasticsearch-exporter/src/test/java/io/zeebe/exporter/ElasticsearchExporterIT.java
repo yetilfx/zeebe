@@ -114,7 +114,10 @@ public class ElasticsearchExporterIT {
   @Test
   public void shouldConnectOverHttps() {
     // given
-    elastic.withSsl("certs/elastic-certificates.p12", true).start();
+    elastic
+      .withKeyStore("certs/elastic-certificates.p12", null)
+      .withTrustStore("certs/elastic-certificates.p12", null)
+      .start();
     configuration = getDefaultConfiguration();
     esClient = createElasticsearchClient(configuration);
 
