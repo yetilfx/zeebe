@@ -16,7 +16,6 @@
 package io.zeebe.exporter;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.carrotsearch.hppc.cursors.ObjectCursor;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -36,17 +35,13 @@ import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 import org.slf4j.Logger;
-import org.testcontainers.elasticsearch.ElasticsearchContainer;
 
 public class ElasticsearchExporterIT {
   private static final String ES_VERSION = "6.6.0";
   private static final String ES_IMAGE = "docker.elastic.co/elasticsearch/elasticsearch";
   private static final ObjectMapper MAPPER = new ObjectMapper();
 
-  private ElasticsearchContainer container =
-      new ElasticsearchContainer(String.format("%s:%s", ES_IMAGE, ES_VERSION))
-          .withEnv("xpack.license.self_generated.type", "trial")
-          .withEnv("xpack.security.enabled", "true");
+  private ElasticsearchNode elastic = new ElasticsearchNode();
 
   private final ExporterIntegrationRule exporterBrokerRule = new ExporterIntegrationRule();
   private ElasticsearchExporterConfiguration configuration;
@@ -57,18 +52,19 @@ public class ElasticsearchExporterIT {
 
   @After
   public void tearDown() throws IOException {
-    exporterBrokerRule.stop();
-
     if (esClient != null) {
       esClient.close();
       esClient = null;
     }
+
+    exporterBrokerRule.stop();
+    elastic.close();
   }
 
   @Test
   public void shouldExportRecords() {
     // given
-    container.start();
+    elastic.start();
     configuration = getDefaultConfiguration();
     exporterBrokerRule.configure("es", ElasticsearchExporter.class, configuration);
     exporterBrokerRule.start();
@@ -95,16 +91,8 @@ public class ElasticsearchExporterIT {
   public void shouldUseBasicAuthenticationIfConfigured() {
     // given
     final String password = "1234567";
-    container.withEnv("ELASTIC_PASSWORD", password).start();
+    elastic.withPassword(password).start();
     configuration = getDefaultConfiguration();
-
-    // when
-    esClient = createElasticsearchClient(configuration);
-
-    // then
-    assertThatThrownBy(() -> esClient.client.ping(RequestOptions.DEFAULT)).isNotNull();
-
-    // when
     configuration.authentication.username = "elastic";
     configuration.authentication.password = password;
     esClient = createElasticsearchClient(configuration);
@@ -115,6 +103,28 @@ public class ElasticsearchExporterIT {
     exporterBrokerRule.performSampleWorkload();
 
     // then
+    exporterBrokerRule.visitExportedRecords(
+        r -> {
+          if (configuration.shouldIndexRecord(r)) {
+            assertRecordExported(r);
+          }
+        });
+  }
+
+  @Test
+  public void shouldConnectOverHttps() {
+    // given
+    elastic.withSsl("certs/elastic-certificates.p12", true).start();
+    configuration = getDefaultConfiguration();
+    esClient = createElasticsearchClient(configuration);
+
+    // when
+    exporterBrokerRule.configure("es", ElasticsearchExporter.class, configuration);
+    exporterBrokerRule.start();
+    exporterBrokerRule.performSampleWorkload();
+
+    // then
+    assertThat(configuration.url).startsWith("https");
     exporterBrokerRule.visitExportedRecords(
         r -> {
           if (configuration.shouldIndexRecord(r)) {
@@ -157,7 +167,6 @@ public class ElasticsearchExporterIT {
         configuration, new ZbLogger("io.zeebe.exporter.elasticsearch"));
   }
 
-  @SuppressWarnings("unchecked")
   private Map<String, Object> recordToMap(final Record<?> record) {
     final JsonNode jsonNode;
     try {
@@ -169,11 +178,11 @@ public class ElasticsearchExporterIT {
     return MAPPER.convertValue(jsonNode, Map.class);
   }
 
-  public ElasticsearchExporterConfiguration getDefaultConfiguration() {
+  private ElasticsearchExporterConfiguration getDefaultConfiguration() {
     final ElasticsearchExporterConfiguration configuration =
         new ElasticsearchExporterConfiguration();
 
-    configuration.url = String.format("http://%s", container.getHttpHostAddress());
+    configuration.url = elastic.getRestHttpHost().toURI();
 
     configuration.bulk.delay = 1;
     configuration.bulk.size = 1;
