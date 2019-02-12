@@ -117,6 +117,8 @@ public class ElasticsearchExporterIT {
         .withTrustStore("certs/instance.p12", null, null)
         .start();
     configuration = getDefaultConfiguration();
+    configuration.ssl.keyStore = "certs/instance.p12";
+    configuration.ssl.trustStore = "certs/instance.p12";
     esClient = createElasticsearchClient(configuration);
 
     // when

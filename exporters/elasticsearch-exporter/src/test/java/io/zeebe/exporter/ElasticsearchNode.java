@@ -85,8 +85,7 @@ public class ElasticsearchNode extends ElasticsearchContainer {
     // set ulimits according to
     // https://www.elastic.co/guide/en/elasticsearch/reference/current/docker.html#next-getting-started-tls-docker
     // todo: remove before merge
-    withJavaOptions("-Djavax.net.debug=ssl:handshake")
-        .withEnv("bootstrap.memory_lock", "true")
+    withEnv("bootstrap.memory_lock", "true")
         .withCreateContainerCmdModifier(
             cmd ->
                 cmd.withUlimits(new Ulimit("memlock", -1, -1), new Ulimit("nofile", 65536, 65536)));
