@@ -1,3 +1,18 @@
+/*
+ * Copyright © 2017 camunda services GmbH (info@camunda.com)
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package io.zeebe.exporter.ssl.pkcs12;
 
 import io.zeebe.exporter.ElasticsearchExporterException;
@@ -9,16 +24,19 @@ import java.nio.file.Files;
 import java.security.KeyStore;
 import java.security.KeyStoreException;
 import java.security.NoSuchAlgorithmException;
+import java.security.NoSuchProviderException;
 import java.security.cert.CertificateException;
 
 public class Pkcs12KeyStoreProvider implements KeyStoreProvider {
+  private static final String DEFAULT_STORE_TYPE = "PKCS12";
+  private static final String DEFAULT_PROVIDER = "SunJSSE";
 
   private final String path;
-  private final String password;
+  private final char[] storePassword;
 
-  public Pkcs12KeyStoreProvider(String path, String password) {
+  public Pkcs12KeyStoreProvider(String path, String storePassword) {
     this.path = path;
-    this.password = password;
+    this.storePassword = toPasswordCharArray(storePassword);
   }
 
   @Override
@@ -35,15 +53,9 @@ public class Pkcs12KeyStoreProvider implements KeyStoreProvider {
       throw new ElasticsearchExporterException("No key store found on disk or in the classpath");
     }
 
-    final KeyStore keyStore;
+    final KeyStore keyStore = getKeyStore();
     try {
-      keyStore = KeyStore.getInstance("pkcs12");
-    } catch (KeyStoreException e) {
-      throw new ElasticsearchExporterException("Failed to create new PKCS12 key store", e);
-    }
-
-    try {
-      keyStore.load(source, getPassword());
+      keyStore.load(source, getStorePassword());
     } catch (IOException | NoSuchAlgorithmException | CertificateException e) {
       throw new ElasticsearchExporterException("Failed to load key store source", e);
     }
@@ -52,13 +64,28 @@ public class Pkcs12KeyStoreProvider implements KeyStoreProvider {
   }
 
   @Override
-  public char[] getPassword() {
-    if (password == null || password.isEmpty()) {
-      return null;
+  public char[] getStorePassword() {
+    return storePassword;
+  }
+
+  private char[] toPasswordCharArray(String password) {
+    if (password == null) {
+      return new char[0];
     } else {
       return password.toCharArray();
     }
+  }
 
+  private KeyStore getKeyStore() {
+    try {
+      try {
+        return KeyStore.getInstance(DEFAULT_STORE_TYPE, DEFAULT_PROVIDER);
+      } catch (NoSuchProviderException e) {
+        return KeyStore.getInstance(DEFAULT_STORE_TYPE);
+      }
+    } catch (KeyStoreException e) {
+      throw new ElasticsearchExporterException("Failed to create new PKCS12 key store", e);
+    }
   }
 
   private InputStream openFileOrResource(String path) throws IOException {

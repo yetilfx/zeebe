@@ -37,8 +37,6 @@ import org.junit.Test;
 import org.slf4j.Logger;
 
 public class ElasticsearchExporterIT {
-  private static final String ES_VERSION = "6.6.0";
-  private static final String ES_IMAGE = "docker.elastic.co/elasticsearch/elasticsearch";
   private static final ObjectMapper MAPPER = new ObjectMapper();
 
   private ElasticsearchNode elastic = new ElasticsearchNode();
@@ -115,9 +113,9 @@ public class ElasticsearchExporterIT {
   public void shouldConnectOverHttps() {
     // given
     elastic
-      .withKeyStore("certs/elastic-certificates.p12", null)
-      .withTrustStore("certs/elastic-certificates.p12", null)
-      .start();
+        .withKeyStore("certs/instance.p12", null, null)
+        .withTrustStore("certs/instance.p12", null, null)
+        .start();
     configuration = getDefaultConfiguration();
     esClient = createElasticsearchClient(configuration);
 
