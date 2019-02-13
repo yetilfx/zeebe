@@ -85,6 +85,12 @@
 
     <dependency>
       <groupId>io.zeebe</groupId>
+      <artifactId>zb-test-util</artifactId>
+      <scope>test</scope>
+    </dependency>
+
+    <dependency>
+      <groupId>io.zeebe</groupId>
       <artifactId>zb-util</artifactId>
       <scope>test</scope>
     </dependency>
@@ -119,12 +125,6 @@
       <scope>test</scope>
     </dependency>
 
-    <dependency>
-      <groupId>org.testcontainers</groupId>
-      <artifactId>elasticsearch</artifactId>
-      <scope>test</scope>
-    </dependency>
-
   </dependencies>
 
   <build>
@@ -132,6 +132,15 @@
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-failsafe-plugin</artifactId>
+        <configuration>
+          <systemPropertyVariables>
+            <javax.net.ssl.trustStore>
+              ${project.build.testResources[0].directory}/certs/elastic-stack-ca.p12
+            </javax.net.ssl.trustStore>
+            <javax.net.ssl.trustStorePassword>changeit</javax.net.ssl.trustStorePassword>
+            <javax.net.ssl.trustStoreType>pkcs12</javax.net.ssl.trustStoreType>
+          </systemPropertyVariables>
+        </configuration>
       </plugin>
     </plugins>
   </build>

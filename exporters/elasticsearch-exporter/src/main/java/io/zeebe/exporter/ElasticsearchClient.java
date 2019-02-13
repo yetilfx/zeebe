@@ -16,13 +16,6 @@
 package io.zeebe.exporter;
 
 import io.zeebe.exporter.record.Record;
-import io.zeebe.exporter.ssl.DefaultKeyManagerProvider;
-import io.zeebe.exporter.ssl.DefaultTrustManagerProvider;
-import io.zeebe.exporter.ssl.KeyManagerProvider;
-import io.zeebe.exporter.ssl.SSLContextFactory;
-import io.zeebe.exporter.ssl.TrustManagerProvider;
-import io.zeebe.exporter.ssl.pkcs12.Pkcs12KeyManagerProvider;
-import io.zeebe.exporter.ssl.pkcs12.Pkcs12TrustManagerProvider;
 import io.zeebe.protocol.clientapi.ValueType;
 import java.io.IOException;
 import java.io.InputStream;
@@ -32,7 +25,6 @@ import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
 import java.util.Collections;
 import java.util.Map;
-import javax.net.ssl.SSLContext;
 import org.apache.http.HttpHost;
 import org.apache.http.auth.AuthScope;
 import org.apache.http.auth.UsernamePasswordCredentials;
@@ -187,10 +179,6 @@ public class ElasticsearchClient {
       setupBasicAuthentication(builder);
     }
 
-    if (configuration.ssl.isPresent()) {
-      setupSslConfiguration(builder);
-    }
-
     return builder;
   }
 
@@ -202,23 +190,6 @@ public class ElasticsearchClient {
             configuration.authentication.username, configuration.authentication.password));
 
     builder.setDefaultCredentialsProvider(credentialsProvider);
-  }
-
-  private void setupSslConfiguration(HttpAsyncClientBuilder client) {
-    final SSLContextFactory factory = new SSLContextFactory();
-    KeyManagerProvider keyManagerProvider = new DefaultKeyManagerProvider();
-    TrustManagerProvider trustManagerProvider = new DefaultTrustManagerProvider();
-
-    if (configuration.ssl.isPkcs12()) {
-      keyManagerProvider = new Pkcs12KeyManagerProvider(configuration.ssl);
-    }
-
-    if (configuration.ssl.trustStore != null && !configuration.ssl.trustStore.isEmpty()) {
-      trustManagerProvider = new Pkcs12TrustManagerProvider(configuration.ssl);
-    }
-
-    final SSLContext sslContext = factory.newContext(keyManagerProvider, trustManagerProvider);
-    client.setSSLContext(sslContext);
   }
 
   private static HttpHost urlToHttpHost(final String url) {

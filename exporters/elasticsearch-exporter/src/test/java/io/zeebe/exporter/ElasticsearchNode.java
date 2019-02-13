@@ -19,54 +19,38 @@ import static java.net.HttpURLConnection.HTTP_OK;
 import static java.net.HttpURLConnection.HTTP_UNAUTHORIZED;
 
 import com.github.dockerjava.api.model.Ulimit;
-import io.zeebe.exporter.ssl.DefaultKeyManagerProvider;
-import io.zeebe.exporter.ssl.DefaultTrustManagerProvider;
-import io.zeebe.exporter.ssl.KeyManagerProvider;
-import io.zeebe.exporter.ssl.SSLContextFactory;
-import io.zeebe.exporter.ssl.TrustManagerProvider;
-import io.zeebe.exporter.ssl.pkcs12.Pkcs12KeyManagerProvider;
-import io.zeebe.exporter.ssl.pkcs12.Pkcs12KeyStoreProvider;
-import io.zeebe.exporter.ssl.pkcs12.Pkcs12TrustManagerProvider;
 import java.io.IOException;
 import java.time.Duration;
-import javax.net.ssl.HttpsURLConnection;
-import javax.net.ssl.SSLContext;
 import org.apache.http.HttpHost;
 import org.apache.http.auth.AuthScope;
 import org.apache.http.auth.UsernamePasswordCredentials;
 import org.apache.http.client.CredentialsProvider;
-import org.apache.http.conn.ssl.NoopHostnameVerifier;
 import org.apache.http.impl.client.BasicCredentialsProvider;
 import org.apache.http.impl.nio.client.HttpAsyncClientBuilder;
 import org.elasticsearch.client.RestClient;
 import org.elasticsearch.client.RestClientBuilder;
 import org.elasticsearch.client.RestHighLevelClient;
 import org.testcontainers.containers.BindMode;
+import org.testcontainers.containers.GenericContainer;
 import org.testcontainers.containers.SelinuxContext;
 import org.testcontainers.containers.wait.strategy.HttpWaitStrategy;
-import org.testcontainers.elasticsearch.ElasticsearchContainer;
+import org.testcontainers.utility.Base58;
 
-/**
- * Wraps around {@link org.testcontainers.elasticsearch.ElasticsearchContainer} to provide some
- * convenience methods.
- */
-public class ElasticsearchNode extends ElasticsearchContainer {
+/** Configurable Elasticsearch container */
+public class ElasticsearchNode extends GenericContainer<ElasticsearchNode> {
 
-  private static final int DEFAULT_PORT = 9200;
+  private static final int DEFAULT_HTTP_PORT = 9200;
+  private static final int DEFAULT_TCP_PORT = 9300;
   private static final String DEFAULT_TAG = "6.6.0";
   private static final String DEFAULT_IMAGE = "docker.elastic.co/elasticsearch/elasticsearch";
+
+  private boolean isSslEnabled;
 
   private boolean isAuthEnabled;
   private final String username = "elastic";
   private String password;
 
-  private boolean isSslEnabled;
-  private KeyManagerProvider keyManagerProvider = new DefaultKeyManagerProvider();
-  private TrustManagerProvider trustManagerProvider = new DefaultTrustManagerProvider();
-
   private RestHighLevelClient client;
-
-  private HttpWaitStrategy waitStrategy;
 
   public ElasticsearchNode() {
     this(DEFAULT_IMAGE, DEFAULT_TAG);
@@ -74,26 +58,21 @@ public class ElasticsearchNode extends ElasticsearchContainer {
 
   public ElasticsearchNode(String image, String tag) {
     super(image + ":" + tag);
-    this.waitStrategy = new HttpWaitStrategy();
-    setWaitStrategy(waitStrategy);
 
-    waitStrategy
-        .forPort(DEFAULT_PORT)
-        .forStatusCodeMatching(response -> response == HTTP_OK || response == HTTP_UNAUTHORIZED)
-        .withStartupTimeout(Duration.ofMinutes(2));
+    withNetworkAliases("elasticsearch-" + Base58.randomString(6));
+    withEnv("discovery.type", "single-node");
+    addExposedPorts(DEFAULT_HTTP_PORT, DEFAULT_TCP_PORT);
 
     // set ulimits according to
     // https://www.elastic.co/guide/en/elasticsearch/reference/current/docker.html#next-getting-started-tls-docker
-    // todo: remove before merge
-    withEnv("bootstrap.memory_lock", "true")
-        .withCreateContainerCmdModifier(
-            cmd ->
-                cmd.withUlimits(new Ulimit("memlock", -1, -1), new Ulimit("nofile", 65536, 65536)));
+    withUlimit("memlock", -1, -1)
+        .withUlimit("nofile", 65536, 65536)
+        .withEnv("bootstrap.memory_lock", "true");
   }
 
   @Override
   public void start() {
-    configureHttpWaitStrategyForSsl();
+    setupHttpStrategy();
     super.start();
   }
 
@@ -112,16 +91,21 @@ public class ElasticsearchNode extends ElasticsearchContainer {
     super.stop();
   }
 
-  public ElasticsearchNode enableXpack() {
+  public ElasticsearchNode withUlimit(String name, int soft, int hard) {
+    withCreateContainerCmdModifier(cmd -> cmd.withUlimits(new Ulimit(name, soft, hard)));
+    return this;
+  }
+
+  public ElasticsearchNode withXpack() {
     withEnv("xpack.license.self_generated.type", "trial");
 
     return this;
   }
 
   public ElasticsearchNode withPassword(String password) {
-    enableXpack().withEnv("xpack.security.enabled", "true").withEnv("ELASTIC_PASSWORD", password);
+    withXpack().withEnv("xpack.security.enabled", "true").withEnv("ELASTIC_PASSWORD", password);
     isAuthEnabled = true;
-    waitStrategy.withBasicCredentials(username, password);
+    this.password = password;
 
     return this;
   }
@@ -135,26 +119,15 @@ public class ElasticsearchNode extends ElasticsearchContainer {
    * Sets the server keystore, that is, the store containing the server certificate and certificate
    * authorities. Also implicitly trusts it for as long as the JVM is alive.
    */
-  public ElasticsearchNode withKeyStore(String keyStore, String storePassword, String keyPassword) {
+  public ElasticsearchNode withKeyStore(String keyStore) {
     final String containerPath = "/usr/share/elasticsearch/config/certs/keyStore.p12";
-    enableXpack()
+    withXpack()
         .withEnv("xpack.security.http.ssl.enabled", "true")
         .withEnv("xpack.security.http.ssl.keystore.path", containerPath)
         .withClasspathResourceMapping(
             keyStore, containerPath, BindMode.READ_ONLY, SelinuxContext.SHARED);
 
-    if (storePassword != null) {
-      withEnv("xpack.security.http.ssl.keystore.password", storePassword);
-    }
-
-    if (keyPassword != null) {
-      withEnv("xpack.security.http.ssl.keystore.key_password", keyPassword);
-    }
-
     isSslEnabled = true;
-    waitStrategy.usingTls();
-    trustManagerProvider =
-        new Pkcs12TrustManagerProvider(new Pkcs12KeyStoreProvider(keyStore, storePassword));
 
     return this;
   }
@@ -165,7 +138,7 @@ public class ElasticsearchNode extends ElasticsearchContainer {
   public ElasticsearchNode withTrustStore(
       String trustStore, String storePassword, String keyPassword) {
     final String containerPath = "/usr/share/elasticsearch/config/certs/trustStore.p12";
-    enableXpack()
+    withXpack()
         .withEnv("xpack.security.http.ssl.enabled", "true")
         .withEnv("xpack.security.http.ssl.truststore.path", containerPath)
         .withClasspathResourceMapping(
@@ -180,9 +153,6 @@ public class ElasticsearchNode extends ElasticsearchContainer {
     }
 
     isSslEnabled = true;
-    waitStrategy.usingTls();
-    keyManagerProvider =
-        new Pkcs12KeyManagerProvider(new Pkcs12KeyStoreProvider(trustStore, storePassword));
 
     return this;
   }
@@ -191,7 +161,7 @@ public class ElasticsearchNode extends ElasticsearchContainer {
     assert isCreated() : "cannot get http host until the container is started";
 
     final String scheme = isSslEnabled ? "https" : "http";
-    return new HttpHost(getContainerIpAddress(), getMappedPort(DEFAULT_PORT), scheme);
+    return new HttpHost(getContainerIpAddress(), getMappedPort(DEFAULT_HTTP_PORT), scheme);
   }
 
   public RestHighLevelClient getClient() {
@@ -233,13 +203,22 @@ public class ElasticsearchNode extends ElasticsearchContainer {
     config.setDefaultCredentialsProvider(credentialsProvider);
   }
 
-  private void configureHttpWaitStrategyForSsl() {
-    final SSLContext sslContext =
-        new SSLContextFactory().newContext(keyManagerProvider, trustManagerProvider);
+  private void setupHttpStrategy() {
+    final HttpWaitStrategy waitStrategy = new HttpWaitStrategy();
 
-    // required for the HttpWaitStrategy
-    // SSLContext.setDefault(sslContext);
-    HttpsURLConnection.setDefaultHostnameVerifier(NoopHostnameVerifier.INSTANCE);
-    HttpsURLConnection.setDefaultSSLSocketFactory(sslContext.getSocketFactory());
+    waitStrategy
+        .forPort(DEFAULT_HTTP_PORT)
+        .forStatusCodeMatching(response -> response == HTTP_OK || response == HTTP_UNAUTHORIZED)
+        .withStartupTimeout(Duration.ofMinutes(2));
+
+    if (isAuthEnabled) {
+      waitStrategy.withBasicCredentials(username, password);
+    }
+
+    if (isSslEnabled) {
+      waitStrategy.usingTls();
+    }
+
+    setWaitStrategy(waitStrategy);
   }
 }
