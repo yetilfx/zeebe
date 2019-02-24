@@ -48,6 +48,7 @@
     <version.jackson>2.9.8</version.jackson>
     <version.jmh>1.21</version.jmh>
     <version.junit>4.12</version.junit>
+    <version.lmdbjava>0.6.3</version.lmdbjava>
     <version.log4j>2.11.2</version.log4j>
     <version.mockito>2.24.5</version.mockito>
     <version.model>7.7.0</version.model>
@@ -226,6 +227,12 @@
         <groupId>org.rocksdb</groupId>
         <artifactId>rocksdbjni</artifactId>
         <version>${version.rocksdbjni}</version>
+      </dependency>
+
+      <dependency>
+        <groupId>org.lmdbjava</groupId>
+        <artifactId>lmdbjava</artifactId>
+        <version>${version.lmdbjava}</version>
       </dependency>
 
       <dependency>

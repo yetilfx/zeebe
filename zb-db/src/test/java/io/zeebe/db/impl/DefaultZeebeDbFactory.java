@@ -16,6 +16,7 @@
 package io.zeebe.db.impl;
 
 import io.zeebe.db.ZeebeDbFactory;
+import io.zeebe.db.impl.lmdb.ZeebeDbFactoryLmdb;
 import io.zeebe.db.impl.rocksdb.ZeebeRocksDbFactory;
 
 public class DefaultZeebeDbFactory {
@@ -23,6 +24,18 @@ public class DefaultZeebeDbFactory {
   public static <ColumnFamilyType extends Enum<ColumnFamilyType>>
       ZeebeDbFactory<ColumnFamilyType> getDefaultFactory(
           Class<ColumnFamilyType> columnFamilyTypeClass) {
+    return getLmdbFactory(columnFamilyTypeClass);
+  }
+
+  public static <ColumnFamilyType extends Enum<ColumnFamilyType>>
+  ZeebeDbFactory<ColumnFamilyType> getLmdbFactory(
+    Class<ColumnFamilyType> columnFamilyTypeClass) {
+    return ZeebeDbFactoryLmdb.newFactory(columnFamilyTypeClass);
+  }
+
+  public static <ColumnFamilyType extends Enum<ColumnFamilyType>>
+  ZeebeDbFactory<ColumnFamilyType> getRocksDbFactory(
+    Class<ColumnFamilyType> columnFamilyTypeClass) {
     return ZeebeRocksDbFactory.newFactory(columnFamilyTypeClass);
   }
 }
