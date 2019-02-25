@@ -18,7 +18,7 @@
 package io.zeebe.broker.logstreams.state;
 
 import io.zeebe.db.ZeebeDbFactory;
-import io.zeebe.db.impl.rocksdb.ZeebeRocksDbFactory;
+import io.zeebe.db.impl.lmdb.ZeebeDbFactoryLmdb;
 
 public final class DefaultZeebeDbFactory {
 
@@ -40,6 +40,6 @@ public final class DefaultZeebeDbFactory {
       ZeebeDbFactory<ColumnFamilyNames> defaultFactory(
           Class<ColumnFamilyNames> columnFamilyNamesClass) {
     // one place to replace the zeebe database implementation
-    return ZeebeRocksDbFactory.newFactory(columnFamilyNamesClass);
+    return ZeebeDbFactoryLmdb.newFactory(columnFamilyNamesClass);
   }
 }

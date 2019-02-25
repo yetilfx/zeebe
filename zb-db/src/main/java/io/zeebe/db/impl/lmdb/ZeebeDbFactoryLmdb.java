@@ -4,7 +4,6 @@ import io.zeebe.db.ZeebeDb;
 import io.zeebe.db.ZeebeDbFactory;
 import io.zeebe.util.ByteValue;
 import java.io.File;
-import java.io.IOException;
 import org.agrona.DirectBuffer;
 import org.lmdbjava.DirectBufferProxy;
 import org.lmdbjava.Env;
@@ -27,11 +26,7 @@ public class ZeebeDbFactoryLmdb<ColumnFamilyNames extends Enum<ColumnFamilyNames
   @Override
   public ZeebeDb<ColumnFamilyNames> createDb(File pathName) {
     if (!pathName.exists()) {
-      try {
-        pathName.createNewFile();
-      } catch (IOException e) {
-        throw new RuntimeException(e);
-      }
+      pathName.mkdirs();
     }
 
     final Env<DirectBuffer> environment =
