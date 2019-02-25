@@ -9,16 +9,16 @@ import java.util.function.Consumer;
 import org.agrona.DirectBuffer;
 import org.lmdbjava.Dbi;
 
-public class ColumnFamilyLmdb<KeyType extends DbKey, ValueType extends DbValue> implements
-  ColumnFamily<KeyType, ValueType> {
+public class ColumnFamilyLmdb<KeyType extends DbKey, ValueType extends DbValue>
+    implements ColumnFamily<KeyType, ValueType> {
 
   private final Dbi<DirectBuffer> dbHandle;
   private final ZeebeDbLmdb lmdb;
   private final KeyType keyInstance;
   private final ValueType valueInstance;
 
-  public ColumnFamilyLmdb(ZeebeDbLmdb lmdb, Dbi<DirectBuffer> dbHandle, KeyType keyInstance,
-    ValueType valueInstance) {
+  public ColumnFamilyLmdb(
+      ZeebeDbLmdb lmdb, Dbi<DirectBuffer> dbHandle, KeyType keyInstance, ValueType valueInstance) {
     this.dbHandle = dbHandle;
     this.lmdb = lmdb;
     this.keyInstance = keyInstance;
@@ -32,9 +32,15 @@ public class ColumnFamilyLmdb<KeyType extends DbKey, ValueType extends DbValue> 
 
   @Override
   public ValueType get(KeyType key) {
+    ValueType value = null;
     final DirectBuffer serializedValue = lmdb.get(dbHandle, key);
-    valueInstance.wrap(serializedValue, 0, serializedValue.capacity());
-    return valueInstance;
+
+    if (serializedValue != null) {
+      valueInstance.wrap(serializedValue, 0, serializedValue.capacity());
+      value = valueInstance;
+    }
+
+    return value;
   }
 
   @Override

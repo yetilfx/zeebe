@@ -231,9 +231,11 @@ public final class BufferUtil {
    * @param content the array to check against
    * @return true if array starts with the all bytes contained in prefix
    */
-  public static boolean startsWith(
-    final DirectBuffer prefix,
-    final DirectBuffer content) {
+  public static boolean startsWith(final DirectBuffer prefix, final DirectBuffer content) {
+    if (content.capacity() < prefix.capacity()) {
+      return false;
+    }
+
     for (int i = 0; i < prefix.capacity(); i++) {
       if (content.getByte(i) != prefix.getByte(i)) {
         return false;
@@ -255,12 +257,12 @@ public final class BufferUtil {
    * @return true if array starts with the all bytes contained in prefix
    */
   public static boolean startsWith(
-    final byte[] prefix,
-    int prefixOffset,
-    final int prefixLength,
-    final byte[] content,
-    int contentOffset,
-    final int contentLength) {
+      final byte[] prefix,
+      int prefixOffset,
+      final int prefixLength,
+      final byte[] content,
+      int contentOffset,
+      final int contentLength) {
     if (contentLength < prefixLength) {
       return false;
     }

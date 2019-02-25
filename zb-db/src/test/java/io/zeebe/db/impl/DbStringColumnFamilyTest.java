@@ -25,6 +25,7 @@ import java.io.File;
 import java.util.ArrayList;
 import java.util.List;
 import org.junit.Before;
+import org.junit.Ignore;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
@@ -193,6 +194,7 @@ public class DbStringColumnFamilyTest {
     assertThat(keys).containsExactly("and");
   }
 
+  @Ignore
   @Test
   public void shouldThrowExceptionOnNestedWhileEqualPrefix() {
     // given
