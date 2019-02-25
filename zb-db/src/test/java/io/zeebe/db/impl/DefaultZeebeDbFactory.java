@@ -28,14 +28,14 @@ public class DefaultZeebeDbFactory {
   }
 
   public static <ColumnFamilyType extends Enum<ColumnFamilyType>>
-  ZeebeDbFactory<ColumnFamilyType> getLmdbFactory(
-    Class<ColumnFamilyType> columnFamilyTypeClass) {
+      ZeebeDbFactory<ColumnFamilyType> getLmdbFactory(
+          Class<ColumnFamilyType> columnFamilyTypeClass) {
     return ZeebeDbFactoryLmdb.newFactory(columnFamilyTypeClass);
   }
 
   public static <ColumnFamilyType extends Enum<ColumnFamilyType>>
-  ZeebeDbFactory<ColumnFamilyType> getRocksDbFactory(
-    Class<ColumnFamilyType> columnFamilyTypeClass) {
+      ZeebeDbFactory<ColumnFamilyType> getRocksDbFactory(
+          Class<ColumnFamilyType> columnFamilyTypeClass) {
     return ZeebeRocksDbFactory.newFactory(columnFamilyTypeClass);
   }
 }
