@@ -41,6 +41,7 @@ import io.zeebe.broker.system.SystemContext;
 import io.zeebe.broker.system.configuration.BrokerCfg;
 import io.zeebe.broker.system.configuration.NetworkCfg;
 import io.zeebe.distributedlog.impl.LogstreamConfig;
+import io.zeebe.gateway.Gateway;
 import io.zeebe.servicecontainer.CompositeServiceBuilder;
 import io.zeebe.servicecontainer.ServiceContainer;
 
@@ -82,7 +83,7 @@ public class ClusterComponent implements Component {
         .install();
 
     if (brokerConfig.getGateway().isEnable()) {
-      initGateway(baseLayerInstall, brokerConfig);
+      initGateway(baseLayerInstall, brokerConfig, context);
     }
 
     initAtomix(baseLayerInstall, context);
@@ -91,12 +92,23 @@ public class ClusterComponent implements Component {
     context.addRequiredStartAction(baseLayerInstall.install());
   }
 
-  private void initGateway(CompositeServiceBuilder baseLayerInstall, BrokerCfg brokerConfig) {
+  private void initGateway(
+      CompositeServiceBuilder baseLayerInstall, BrokerCfg brokerConfig, SystemContext context) {
     final EmbeddedGatewayService gatewayService = new EmbeddedGatewayService(brokerConfig);
     baseLayerInstall
         .createService(GATEWAY_SERVICE, gatewayService)
         .dependency(ATOMIX_SERVICE, gatewayService.getAtomixClusterInjector())
         .install();
+
+    // hotfix to ensure gateway is closed even if service container fails and never stops this service
+    // see https://github.com/zeebe-io/zeebe/issues/2537
+    context.addResourceReleasingDelegate(
+        () -> {
+          final Gateway gateway = gatewayService.get();
+          if (gateway != null) {
+            gateway.stop();
+          }
+        });
   }
 
   private void initAtomix(
