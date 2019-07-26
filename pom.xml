@@ -33,6 +33,7 @@
     <module>dispatcher</module>
     <module>msgpack-core</module>
     <module>msgpack-value</module>
+    <module>msgpack-el</module>
     <module>json-el</module>
     <module>json-path</module>
     <module>build-tools</module>
