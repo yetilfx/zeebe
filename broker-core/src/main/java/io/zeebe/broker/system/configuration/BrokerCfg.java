@@ -8,19 +8,19 @@
 package io.zeebe.broker.system.configuration;
 
 import com.google.gson.GsonBuilder;
+import com.typesafe.config.Optional;
 import io.zeebe.broker.exporter.debug.DebugLogExporter;
 import io.zeebe.util.Environment;
 import java.util.ArrayList;
 import java.util.List;
 
 public class BrokerCfg {
-
-  private NetworkCfg network = new NetworkCfg();
-  private ClusterCfg cluster = new ClusterCfg();
-  private ThreadsCfg threads = new ThreadsCfg();
-  private DataCfg data = new DataCfg();
-  private List<ExporterCfg> exporters = new ArrayList<>();
-  private EmbeddedGatewayCfg gateway = new EmbeddedGatewayCfg();
+  @Optional private NetworkCfg network = new NetworkCfg();
+  @Optional private ClusterCfg cluster = new ClusterCfg();
+  @Optional private ThreadsCfg threads = new ThreadsCfg();
+  @Optional private DataCfg data = new DataCfg();
+  @Optional private List<ExporterCfg> exporters = new ArrayList<>();
+  @Optional private EmbeddedGatewayCfg gateway = new EmbeddedGatewayCfg();
 
   public void init(final String brokerBase) {
     init(brokerBase, new Environment());

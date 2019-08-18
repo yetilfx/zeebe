@@ -7,6 +7,9 @@
  */
 package io.zeebe.test;
 
+import com.typesafe.config.Config;
+import com.typesafe.config.ConfigBeanFactory;
+import com.typesafe.config.ConfigFactory;
 import io.zeebe.broker.Broker;
 import io.zeebe.broker.clustering.base.partitions.Partition;
 import io.zeebe.broker.clustering.base.partitions.PartitionServiceNames;
@@ -33,6 +36,8 @@ import io.zeebe.util.sched.clock.ControlledActorClock;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.io.Reader;
 import java.util.List;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
@@ -96,7 +101,9 @@ public class EmbeddedBrokerRule extends ExternalResource {
       if (configStream == null) {
         brokerCfg = new BrokerCfg();
       } else {
-        brokerCfg = TomlConfigurationReader.read(configStream, BrokerCfg.class);
+        final Reader reader = new InputStreamReader(configStream);
+        final Config config = ConfigFactory.parseReader(reader);
+        brokerCfg = ConfigBeanFactory.create(config.getConfig("zeebe"), BrokerCfg.class);
       }
       configureBroker(brokerCfg);
     } catch (final IOException e) {

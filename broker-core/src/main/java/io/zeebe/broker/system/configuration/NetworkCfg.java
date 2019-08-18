@@ -10,6 +10,7 @@ package io.zeebe.broker.system.configuration;
 import static io.zeebe.broker.system.configuration.EnvironmentConstants.ENV_HOST;
 import static io.zeebe.broker.system.configuration.EnvironmentConstants.ENV_PORT_OFFSET;
 
+import com.typesafe.config.Optional;
 import io.zeebe.broker.system.configuration.SocketBindingCfg.CommandApiCfg;
 import io.zeebe.broker.system.configuration.SocketBindingCfg.InternalApiCfg;
 import io.zeebe.broker.system.configuration.SocketBindingCfg.MonitoringApiCfg;
@@ -22,12 +23,12 @@ public class NetworkCfg implements ConfigurationEntry {
   public static final int DEFAULT_INTERNAL_API_PORT = 26502;
   public static final int DEFAULT_MONITORING_API_PORT = 9600;
 
-  private String host = DEFAULT_HOST;
-  private int portOffset = 0;
+  @Optional private String host = DEFAULT_HOST;
+  @Optional private int portOffset = 0;
 
-  private CommandApiCfg commandApi = new CommandApiCfg();
-  private InternalApiCfg internalApi = new InternalApiCfg();
-  private MonitoringApiCfg monitoringApi = new MonitoringApiCfg();
+  @Optional private CommandApiCfg commandApi = new CommandApiCfg();
+  @Optional private InternalApiCfg internalApi = new InternalApiCfg();
+  @Optional private MonitoringApiCfg monitoringApi = new MonitoringApiCfg();
 
   @Override
   public void init(

@@ -7,16 +7,19 @@
  */
 package io.zeebe.broker.system.configuration;
 
+import com.typesafe.config.ConfigMemorySize;
+import com.typesafe.config.Optional;
 import io.zeebe.transport.SocketAddress;
 
 public class SocketBindingCfg {
-  public static final String DEFAULT_SEND_BUFFER_SIZE = "16M";
+  private static final ConfigMemorySize DEFAULT_SEND_BUFFER_SIZE =
+      ConfigMemorySize.ofBytes(16 * 1024 * 1024);
 
-  protected String host;
-  protected int port;
-  protected String sendBufferSize;
+  @Optional protected String host;
+  @Optional protected int port;
+  @Optional protected ConfigMemorySize sendBufferSize;
 
-  private SocketBindingCfg(int defaultPort) {
+  private SocketBindingCfg(final int defaultPort) {
     this.port = defaultPort;
   }
 
@@ -24,7 +27,7 @@ public class SocketBindingCfg {
     return new SocketAddress(host, port);
   }
 
-  public void applyDefaults(NetworkCfg networkCfg) {
+  void applyDefaults(final NetworkCfg networkCfg) {
     if (host == null) {
       host = networkCfg.getHost();
     }
@@ -40,7 +43,7 @@ public class SocketBindingCfg {
     return host;
   }
 
-  public void setHost(String host) {
+  public void setHost(final String host) {
     this.host = host;
   }
 
@@ -48,15 +51,15 @@ public class SocketBindingCfg {
     return port;
   }
 
-  public void setPort(int port) {
+  public void setPort(final int port) {
     this.port = port;
   }
 
-  public String getSendBufferSize() {
+  public ConfigMemorySize getSendBufferSize() {
     return sendBufferSize;
   }
 
-  public void setSendBufferSize(String sendBufferSize) {
+  public void setSendBufferSize(final ConfigMemorySize sendBufferSize) {
     this.sendBufferSize = sendBufferSize;
   }
 

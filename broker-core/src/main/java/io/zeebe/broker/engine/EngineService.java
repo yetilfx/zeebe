@@ -66,7 +66,7 @@ public class EngineService implements Service<EngineService> {
 
     this.serviceContainer = serviceContainer;
     final DataCfg dataCfg = brokerCfg.getData();
-    this.snapshotPeriod = DurationUtil.parse(dataCfg.getSnapshotPeriod());
+    this.snapshotPeriod = dataCfg.getSnapshotPeriod();
   }
 
   @Override

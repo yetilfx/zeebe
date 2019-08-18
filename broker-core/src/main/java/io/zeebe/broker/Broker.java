@@ -7,6 +7,9 @@
  */
 package io.zeebe.broker;
 
+import com.typesafe.config.Config;
+import com.typesafe.config.ConfigBeanFactory;
+import com.typesafe.config.ConfigFactory;
 import io.zeebe.broker.clustering.ClusterComponent;
 import io.zeebe.broker.engine.EngineComponent;
 import io.zeebe.broker.exporter.ExporterComponent;
@@ -47,6 +50,12 @@ public class Broker implements AutoCloseable {
   public Broker(final SystemContext systemContext) {
     this.brokerContext = systemContext;
     LogUtil.doWithMDC(systemContext.getDiagnosticContext(), () -> start());
+  }
+
+  public static void main(String[] args) {
+    final Config config = ConfigFactory.load("application.conf");
+    final BrokerCfg brokerCfg = ConfigBeanFactory.create(config.getConfig("zeebe"), BrokerCfg.class);
+    LOG.info("Loaded config: {}", config);
   }
 
   protected void start() {

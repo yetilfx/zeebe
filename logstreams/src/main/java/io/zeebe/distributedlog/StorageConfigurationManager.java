@@ -7,7 +7,7 @@
  */
 package io.zeebe.distributedlog;
 
-import io.zeebe.util.ByteValue;
+import com.typesafe.config.ConfigMemorySize;
 import io.zeebe.util.FileUtil;
 import io.zeebe.util.sched.Actor;
 import io.zeebe.util.sched.future.ActorFuture;
@@ -30,9 +30,9 @@ public class StorageConfigurationManager extends Actor {
 
   private final int[] partitionCountPerDataDirectory;
   private final List<String> directories;
-  private final String segmentSize;
+  private final ConfigMemorySize segmentSize;
 
-  public StorageConfigurationManager(List<String> dataDirectories, String segmentSize) {
+  public StorageConfigurationManager(final List<String> dataDirectories, final ConfigMemorySize segmentSize) {
     this.directories = dataDirectories;
     this.segmentSize = segmentSize;
     this.partitionCountPerDataDirectory = new int[dataDirectories.size()];
@@ -45,13 +45,13 @@ public class StorageConfigurationManager extends Actor {
     }
   }
 
-  private void readConfigurations(String dataDirectoryName, int offset) {
+  private void readConfigurations(final String dataDirectoryName, final int offset) {
     final File dataDirectory = new File(dataDirectoryName);
 
     final File[] partitionDirectories =
         dataDirectory.listFiles((d, f) -> new File(d, f).isDirectory());
 
-    for (File partitionDirectory : partitionDirectories) {
+    for (final File partitionDirectory : partitionDirectories) {
       final File logDirectory = new File(partitionDirectory, PARTITION_LOG_DIR);
       final File statesDirectory = new File(partitionDirectory, PARTITION_STATES_DIR);
 
@@ -61,7 +61,7 @@ public class StorageConfigurationManager extends Actor {
   }
 
   // get existing or create new
-  public ActorFuture<StorageConfiguration> createConfiguration(int partitionId) {
+  public ActorFuture<StorageConfiguration> createConfiguration(final int partitionId) {
     final ActorFuture<StorageConfiguration> future = new CompletableActorFuture<>();
 
     actor.run(
@@ -91,20 +91,18 @@ public class StorageConfigurationManager extends Actor {
               final StorageConfiguration storage =
                   new StorageConfiguration(logDirectory, statesDirectory);
 
-              storage
-                  .setPartitionId(partitionId)
-                  .setLogSegmentSize(new ByteValue(segmentSize).toBytes());
+              storage.setPartitionId(partitionId).setLogSegmentSize(segmentSize.toBytes());
 
               configurations.add(storage);
 
               future.complete(storage);
 
               partitionCountPerDataDirectory[assignedDataDirOffset]++;
-            } catch (Exception e) {
+            } catch (final Exception e) {
               try {
                 // try to deleted partially created dirs / files
                 FileUtil.deleteFolder(partitionDirectory.getAbsolutePath());
-              } catch (IOException e1) {
+              } catch (final IOException e1) {
                 e1.printStackTrace();
               }
 

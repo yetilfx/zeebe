@@ -27,7 +27,6 @@ import io.zeebe.distributedlog.impl.LogstreamConfig;
 import io.zeebe.servicecontainer.Service;
 import io.zeebe.servicecontainer.ServiceStartContext;
 import io.zeebe.servicecontainer.ServiceStopContext;
-import io.zeebe.util.ByteValue;
 import io.zeebe.util.sched.future.ActorFuture;
 import io.zeebe.util.sched.future.CompletableActorFuture;
 import java.io.File;
@@ -50,7 +49,7 @@ public class AtomixService implements Service<Atomix> {
   }
 
   @Override
-  public void start(ServiceStartContext startContext) {
+  public void start(final ServiceStartContext startContext) {
     final ClusterCfg clusterCfg = configuration.getCluster();
 
     final int nodeId = clusterCfg.getNodeId();
@@ -114,8 +113,7 @@ public class AtomixService implements Service<Atomix> {
             .withFlushOnCommit();
 
     if (dataConfiguration.getRaftSegmentSize() != null) {
-      partitionGroupBuilder.withSegmentSize(
-          new ByteValue(dataConfiguration.getRaftSegmentSize()).toBytes());
+      partitionGroupBuilder.withSegmentSize(dataConfiguration.getRaftSegmentSize().toBytes());
     }
 
     final RaftPartitionGroup partitionGroup = partitionGroupBuilder.build();
@@ -134,7 +132,7 @@ public class AtomixService implements Service<Atomix> {
   }
 
   @Override
-  public void stop(ServiceStopContext stopContext) {
+  public void stop(final ServiceStopContext stopContext) {
     final String localMemberId = atomix.getMembershipService().getLocalMember().id().id();
     final CompletableFuture<Void> stopFuture = atomix.stop();
     stopContext.async(mapCompletableFuture(stopFuture));
@@ -146,7 +144,7 @@ public class AtomixService implements Service<Atomix> {
     return atomix;
   }
 
-  private List<String> getRaftGroupMembers(ClusterCfg clusterCfg) {
+  private List<String> getRaftGroupMembers(final ClusterCfg clusterCfg) {
     final int clusterSize = clusterCfg.getClusterSize();
     // node ids are always 0 to clusterSize - 1
     final List<String> members = new ArrayList<>();
@@ -157,7 +155,7 @@ public class AtomixService implements Service<Atomix> {
   }
 
   private NodeDiscoveryProvider createDiscoveryProvider(
-      ClusterCfg clusterCfg, String localMemberId) {
+      final ClusterCfg clusterCfg, final String localMemberId) {
     final BootstrapDiscoveryBuilder builder = BootstrapDiscoveryProvider.builder();
     final List<String> initialContactPoints = clusterCfg.getInitialContactPoints();
 
@@ -175,7 +173,7 @@ public class AtomixService implements Service<Atomix> {
     return builder.withNodes(nodes).build();
   }
 
-  private ActorFuture<Void> mapCompletableFuture(CompletableFuture<Void> atomixFuture) {
+  private ActorFuture<Void> mapCompletableFuture(final CompletableFuture<Void> atomixFuture) {
     final ActorFuture<Void> mappedActorFuture = new CompletableActorFuture<>();
 
     atomixFuture

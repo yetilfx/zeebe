@@ -11,6 +11,7 @@ import static io.zeebe.broker.clustering.base.ClusterBaseLayerServiceNames.LEADE
 import static io.zeebe.broker.transport.TransportServiceNames.COMMAND_API_MESSAGE_HANDLER;
 import static io.zeebe.broker.transport.TransportServiceNames.COMMAND_API_SERVER_NAME;
 
+import com.typesafe.config.ConfigMemorySize;
 import io.zeebe.broker.system.Component;
 import io.zeebe.broker.system.SystemContext;
 import io.zeebe.broker.system.configuration.NetworkCfg;
@@ -71,7 +72,7 @@ public class TransportComponent implements Component {
         serviceContainer,
         name,
         bindAddr.toInetSocketAddress(),
-        new ByteValue(socketBindingCfg.getSendBufferSize()),
+        socketBindingCfg.getSendBufferSize(),
         requestHandlerService,
         messageHandlerService);
   }
@@ -81,11 +82,11 @@ public class TransportComponent implements Component {
       final ServiceContainer serviceContainer,
       final String name,
       final InetSocketAddress bindAddress,
-      final ByteValue sendBufferSize,
+      final ConfigMemorySize sendBufferSize,
       final ServiceName<? extends ServerRequestHandler> requestHandlerDependency,
       final ServiceName<? extends ServerMessageHandler> messageHandlerDependency) {
     final ServerTransportService service =
-        new ServerTransportService(name, bindAddress, sendBufferSize);
+        new ServerTransportService(name, bindAddress, sendBufferSize.toBytes());
 
     systemContext.addResourceReleasingDelegate(service.getReleasingResourcesDelegate());
 

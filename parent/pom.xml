@@ -46,6 +46,7 @@
     <version.commons-logging>1.2</version.commons-logging>
     <version.commons-math>3.6.1</version.commons-math>
     <version.commons-codec>1.13</version.commons-codec>
+    <version.config>1.3.4</version.config>
     <version.elasticsearch>6.8.2</version.elasticsearch>
     <version.embedded-elasticsearch>2.10.0</version.embedded-elasticsearch>
     <version.error-prone>2.3.3</version.error-prone>
@@ -499,6 +500,12 @@
         <groupId>io.prometheus</groupId>
         <artifactId>simpleclient_httpserver</artifactId>
         <version>${version.prometheus}</version>
+      </dependency>
+
+      <dependency>
+        <groupId>com.typesafe</groupId>
+        <artifactId>config</artifactId>
+        <version>${version.config}</version>
       </dependency>
 
       <dependency>

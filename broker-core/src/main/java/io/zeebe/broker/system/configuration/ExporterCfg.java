@@ -7,6 +7,10 @@
  */
 package io.zeebe.broker.system.configuration;
 
+import com.typesafe.config.ConfigFactory;
+import com.typesafe.config.ConfigObject;
+import com.typesafe.config.ConfigValueFactory;
+import com.typesafe.config.Optional;
 import io.zeebe.util.Environment;
 import java.util.Map;
 
@@ -23,16 +27,16 @@ public class ExporterCfg implements ConfigurationEntry {
    *
    * <p>optional field: if missing, will lookup the class in the zeebe classpath
    */
-  private String jarPath;
+  @Optional private String jarPath;
 
   /** fully qualified class name pointing to the class implementing the exporter interface */
   private String className;
 
   /** map of arguments to use when instantiating the exporter */
-  private Map<String, Object> args;
+  @Optional private ConfigObject args;
 
   @Override
-  public void init(BrokerCfg globalConfig, String brokerBase, Environment environment) {
+  public void init(final BrokerCfg globalConfig, final String brokerBase, final Environment environment) {
     if (isExternal()) {
       jarPath = ConfigurationUtil.toAbsolutePath(jarPath, brokerBase);
     }
@@ -46,7 +50,7 @@ public class ExporterCfg implements ConfigurationEntry {
     return id;
   }
 
-  public void setId(String id) {
+  public void setId(final String id) {
     this.id = id;
   }
 
@@ -54,7 +58,7 @@ public class ExporterCfg implements ConfigurationEntry {
     return jarPath;
   }
 
-  public void setJarPath(String jarPath) {
+  public void setJarPath(final String jarPath) {
     this.jarPath = jarPath;
   }
 
@@ -62,16 +66,20 @@ public class ExporterCfg implements ConfigurationEntry {
     return className;
   }
 
-  public void setClassName(String className) {
+  public void setClassName(final String className) {
     this.className = className;
   }
 
-  public Map<String, Object> getArgs() {
+  public ConfigObject getArgs() {
     return args;
   }
 
-  public void setArgs(Map<String, Object> args) {
+  public void setArgs(final ConfigObject args) {
     this.args = args;
+  }
+
+  public void setArgs(final Map<String, Object> args) {
+    this.args = ConfigValueFactory.fromMap(args);
   }
 
   private boolean isEmpty(final String value) {

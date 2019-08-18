@@ -7,6 +7,9 @@
  */
 package io.zeebe.gateway;
 
+import com.typesafe.config.Config;
+import com.typesafe.config.ConfigBeanFactory;
+import com.typesafe.config.ConfigFactory;
 import io.atomix.cluster.AtomixCluster;
 import io.atomix.cluster.discovery.BootstrapDiscoveryProvider;
 import io.atomix.utils.net.Address;
@@ -15,7 +18,6 @@ import io.zeebe.gateway.impl.broker.BrokerClient;
 import io.zeebe.gateway.impl.broker.BrokerClientImpl;
 import io.zeebe.gateway.impl.configuration.ClusterCfg;
 import io.zeebe.gateway.impl.configuration.GatewayCfg;
-import io.zeebe.util.TomlConfigurationReader;
 import io.zeebe.util.sched.ActorScheduler;
 import java.io.IOException;
 import java.nio.file.Paths;
@@ -28,7 +30,7 @@ public class StandaloneGateway {
   private final GatewayCfg gatewayCfg;
   private final ActorScheduler actorScheduler;
 
-  public StandaloneGateway(GatewayCfg gatewayCfg) {
+  public StandaloneGateway(final GatewayCfg gatewayCfg) {
     atomixCluster = createAtomixCluster(gatewayCfg.getCluster());
     actorScheduler = createActorScheduler(gatewayCfg);
     final Function<GatewayCfg, BrokerClient> brokerClientFactory =
@@ -37,7 +39,7 @@ public class StandaloneGateway {
     this.gatewayCfg = gatewayCfg;
   }
 
-  private AtomixCluster createAtomixCluster(ClusterCfg clusterCfg) {
+  private AtomixCluster createAtomixCluster(final ClusterCfg clusterCfg) {
     final AtomixCluster atomixCluster =
         AtomixCluster.builder()
             .withMemberId(clusterCfg.getMemberId())
@@ -54,7 +56,7 @@ public class StandaloneGateway {
     return atomixCluster;
   }
 
-  private ActorScheduler createActorScheduler(GatewayCfg configuration) {
+  private ActorScheduler createActorScheduler(final GatewayCfg configuration) {
     final ActorScheduler actorScheduler =
         ActorScheduler.newActorScheduler()
             .setCpuBoundActorThreadCount(configuration.getThreads().getManagementThreads())
@@ -84,13 +86,13 @@ public class StandaloneGateway {
     }
   }
 
-  public static void main(String args[]) throws Exception {
+  public static void main(final String[] args) throws Exception {
     final GatewayCfg gatewayCfg = initConfiguration(args);
     gatewayCfg.init();
     new StandaloneGateway(gatewayCfg).run();
   }
 
-  private static GatewayCfg initConfiguration(String[] args) {
+  private static GatewayCfg initConfiguration(final String[] args) {
     if (args.length >= 1) {
       String configFileLocation = args[0];
 
@@ -99,7 +101,9 @@ public class StandaloneGateway {
             Paths.get(getBasePath(), configFileLocation).toAbsolutePath().normalize().toString();
       }
 
-      return TomlConfigurationReader.read(configFileLocation, GatewayCfg.class);
+      final Config config =
+          ConfigFactory.load(configFileLocation).withFallback(ConfigFactory.load("gateway.conf"));
+      return ConfigBeanFactory.create(config, GatewayCfg.class);
     } else {
       return new GatewayCfg();
     }

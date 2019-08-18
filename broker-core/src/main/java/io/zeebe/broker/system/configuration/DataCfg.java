@@ -7,7 +7,11 @@
  */
 package io.zeebe.broker.system.configuration;
 
+import com.typesafe.config.ConfigMemorySize;
+import com.typesafe.config.Optional;
 import io.zeebe.util.Environment;
+import java.time.Duration;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 
@@ -15,20 +19,16 @@ public class DataCfg implements ConfigurationEntry {
   public static final String DEFAULT_DIRECTORY = "data";
 
   // Hint: do not use Collections.singletonList as this does not support replaceAll
-  private List<String> directories = Arrays.asList(DEFAULT_DIRECTORY);
-
-  private String logSegmentSize = "512M";
-
-  private String snapshotPeriod = "15m";
-
-  private String snapshotReplicationPeriod = "5m";
-
-  private String raftSegmentSize;
-
-  private int maxSnapshots = 3;
+  @Optional private List<String> directories = Arrays.asList(DEFAULT_DIRECTORY);
+  @Optional private ConfigMemorySize logSegmentSize = ConfigMemorySize.ofBytes(512 * 1024 * 1024);
+  @Optional private Duration snapshotPeriod = Duration.ofMinutes(15);
+  @Optional private Duration snapshotReplicationPeriod = Duration.ofMinutes(5);
+  @Optional private ConfigMemorySize raftSegmentSize;
+  @Optional private int maxSnapshots = 3;
 
   @Override
-  public void init(BrokerCfg globalConfig, String brokerBase, Environment environment) {
+  public void init(
+      final BrokerCfg globalConfig, final String brokerBase, final Environment environment) {
     applyEnvironment(environment);
     directories.replaceAll(d -> ConfigurationUtil.toAbsolutePath(d, brokerBase));
   }
@@ -41,31 +41,31 @@ public class DataCfg implements ConfigurationEntry {
     return directories;
   }
 
-  public void setDirectories(List<String> directories) {
+  public void setDirectories(final List<String> directories) {
     this.directories = directories;
   }
 
-  public String getLogSegmentSize() {
+  public ConfigMemorySize getLogSegmentSize() {
     return logSegmentSize;
   }
 
-  public void setLogSegmentSize(String logSegmentSize) {
+  public void setLogSegmentSize(final ConfigMemorySize logSegmentSize) {
     this.logSegmentSize = logSegmentSize;
   }
 
-  public String getSnapshotPeriod() {
+  public Duration getSnapshotPeriod() {
     return snapshotPeriod;
   }
 
-  public void setSnapshotPeriod(final String snapshotPeriod) {
+  public void setSnapshotPeriod(final Duration snapshotPeriod) {
     this.snapshotPeriod = snapshotPeriod;
   }
 
-  public String getSnapshotReplicationPeriod() {
+  public Duration getSnapshotReplicationPeriod() {
     return snapshotReplicationPeriod;
   }
 
-  public void setSnapshotReplicationPeriod(String snapshotReplicationPeriod) {
+  public void setSnapshotReplicationPeriod(final Duration snapshotReplicationPeriod) {
     this.snapshotReplicationPeriod = snapshotReplicationPeriod;
   }
 
@@ -77,11 +77,11 @@ public class DataCfg implements ConfigurationEntry {
     this.maxSnapshots = maxSnapshots;
   }
 
-  public String getRaftSegmentSize() {
+  public ConfigMemorySize getRaftSegmentSize() {
     return raftSegmentSize;
   }
 
-  public void setRaftSegmentSize(String raftSegmentSize) {
+  public void setRaftSegmentSize(final ConfigMemorySize raftSegmentSize) {
     this.raftSegmentSize = raftSegmentSize;
   }
 

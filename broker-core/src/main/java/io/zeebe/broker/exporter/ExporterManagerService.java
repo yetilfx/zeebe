@@ -85,7 +85,7 @@ public class ExporterManagerService implements Service<ExporterManagerService> {
               .maxSnapshots(dataCfg.getMaxSnapshots())
               .descriptors(exporterRepository.getExporters().values())
               .logStreamReader(new BufferedLogStreamReader())
-              .snapshotPeriod(DurationUtil.parse(dataCfg.getSnapshotPeriod()));
+              .snapshotPeriod(dataCfg.getSnapshotPeriod());
 
       final LogStream logStream = partition.getLogStream();
       final String logName = logStream.getLogName();

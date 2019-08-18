@@ -9,6 +9,7 @@ package io.zeebe.broker.system.configuration;
 
 import static io.zeebe.protocol.Protocol.START_PARTITION_ID;
 
+import com.typesafe.config.Optional;
 import io.zeebe.util.Environment;
 import java.util.Collections;
 import java.util.List;
@@ -22,14 +23,13 @@ public class ClusterCfg implements ConfigurationEntry {
   public static final int DEFAULT_CLUSTER_SIZE = 1;
   public static final String DEFAULT_CLUSTER_NAME = "zeebe-cluster";
 
-  private List<String> initialContactPoints = DEFAULT_CONTACT_POINTS;
-
-  private List<Integer> partitionIds;
-  private int nodeId = DEFAULT_NODE_ID;
-  private int partitionsCount = DEFAULT_PARTITIONS_COUNT;
-  private int replicationFactor = DEFAULT_REPLICATION_FACTOR;
-  private int clusterSize = DEFAULT_CLUSTER_SIZE;
-  private String clusterName = DEFAULT_CLUSTER_NAME;
+  @Optional private List<String> initialContactPoints = DEFAULT_CONTACT_POINTS;
+  @Optional private List<Integer> partitionIds;
+  @Optional private int nodeId = DEFAULT_NODE_ID;
+  @Optional private int partitionsCount = DEFAULT_PARTITIONS_COUNT;
+  @Optional private int replicationFactor = DEFAULT_REPLICATION_FACTOR;
+  @Optional private int clusterSize = DEFAULT_CLUSTER_SIZE;
+  @Optional private String clusterName = DEFAULT_CLUSTER_NAME;
 
   @Override
   public void init(

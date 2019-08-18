@@ -7,6 +7,9 @@
  */
 package io.zeebe.broker.exporter.repo;
 
+import com.typesafe.config.Config;
+import com.typesafe.config.ConfigObject;
+import com.typesafe.config.ConfigValueFactory;
 import io.zeebe.broker.exporter.context.ExporterConfiguration;
 import io.zeebe.exporter.api.Exporter;
 import java.util.Map;
@@ -18,9 +21,16 @@ public class ExporterDescriptor {
   public ExporterDescriptor(
       final String id,
       final Class<? extends Exporter> exporterClass,
-      final Map<String, Object> args) {
+      final ConfigObject args) {
     this.exporterClass = exporterClass;
     this.configuration = new ExporterConfiguration(id, args);
+  }
+
+  public ExporterDescriptor(
+    final String id,
+    final Class<? extends Exporter> exporterClass,
+    final Map<String, Object> args) {
+    this(id, exporterClass, ConfigValueFactory.fromMap(args));
   }
 
   public Exporter newInstance() throws ExporterInstantiationException {

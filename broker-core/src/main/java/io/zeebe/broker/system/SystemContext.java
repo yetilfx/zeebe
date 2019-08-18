@@ -7,6 +7,9 @@
  */
 package io.zeebe.broker.system;
 
+import com.typesafe.config.Config;
+import com.typesafe.config.ConfigBeanFactory;
+import com.typesafe.config.ConfigFactory;
 import io.zeebe.broker.Loggers;
 import io.zeebe.broker.system.configuration.BrokerCfg;
 import io.zeebe.broker.system.configuration.ClusterCfg;
@@ -14,13 +17,14 @@ import io.zeebe.broker.system.configuration.SocketBindingCfg;
 import io.zeebe.broker.system.configuration.ThreadsCfg;
 import io.zeebe.servicecontainer.ServiceContainer;
 import io.zeebe.servicecontainer.impl.ServiceContainerImpl;
-import io.zeebe.util.TomlConfigurationReader;
 import io.zeebe.util.sched.ActorScheduler;
 import io.zeebe.util.sched.clock.ActorClock;
 import io.zeebe.util.sched.future.ActorFuture;
 import java.io.Closeable;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.io.Reader;
 import java.nio.file.Paths;
 import java.time.Duration;
 import java.util.ArrayList;
@@ -55,21 +59,25 @@ public class SystemContext implements AutoCloseable {
           Paths.get(basePath, configFileLocation).normalize().toAbsolutePath().toString();
     }
 
-    brokerCfg = TomlConfigurationReader.read(configFileLocation, BrokerCfg.class);
+    final Config config =
+        ConfigFactory.load(configFileLocation).withFallback(ConfigFactory.load("application.conf"));
+    brokerCfg = ConfigBeanFactory.create(config, BrokerCfg.class);
 
     initSystemContext(clock, basePath);
   }
 
   public SystemContext(
       final InputStream configStream, final String basePath, final ActorClock clock) {
-    brokerCfg = TomlConfigurationReader.read(configStream, BrokerCfg.class);
+    final Reader reader = new InputStreamReader(configStream);
+    final Config config =
+        ConfigFactory.parseReader(reader).withFallback(ConfigFactory.load("application.conf"));
+    brokerCfg = ConfigBeanFactory.create(config, BrokerCfg.class);
 
     initSystemContext(clock, basePath);
   }
 
   public SystemContext(final BrokerCfg brokerCfg, final String basePath, final ActorClock clock) {
     this.brokerCfg = brokerCfg;
-
     initSystemContext(clock, basePath);
   }
 

@@ -9,6 +9,7 @@ package io.zeebe.distributedlog;
 
 import static io.zeebe.protocol.Protocol.START_PARTITION_ID;
 
+import com.typesafe.config.ConfigMemorySize;
 import io.atomix.cluster.Node;
 import io.atomix.cluster.discovery.BootstrapDiscoveryProvider;
 import io.atomix.core.Atomix;
@@ -86,7 +87,7 @@ public class DistributedLogRule extends ExternalResource {
     }
     config =
         new StorageConfigurationManager(
-            Collections.singletonList(rootDirectory.toAbsolutePath().toString()), "512M");
+            Collections.singletonList(rootDirectory.toAbsolutePath().toString()), ConfigMemorySize.ofBytes(512 * 1024 * 1024));
   }
 
   public Node getNode() {

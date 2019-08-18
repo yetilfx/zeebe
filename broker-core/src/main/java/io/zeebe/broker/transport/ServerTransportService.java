@@ -32,10 +32,10 @@ public class ServerTransportService implements Service<ServerTransport> {
   protected final String readableName;
   protected final InetSocketAddress bindAddress;
   protected ServerTransport serverTransport;
-  private final ByteValue sendBufferSize;
+  private final long sendBufferSize;
 
   public ServerTransportService(
-      String readableName, InetSocketAddress bindAddress, ByteValue sendBufferSize) {
+      String readableName, InetSocketAddress bindAddress, long sendBufferSize) {
     this.readableName = readableName;
     this.bindAddress = bindAddress;
     this.sendBufferSize = sendBufferSize;
@@ -52,7 +52,7 @@ public class ServerTransportService implements Service<ServerTransport> {
             .name(readableName)
             .bindAddress(bindAddress)
             .scheduler(scheduler)
-            .messageMemoryPool(new NonBlockingMemoryPool(sendBufferSize))
+            .messageMemoryPool(new NonBlockingMemoryPool((int)sendBufferSize))
             .build(messageHandler, requestHandler);
 
     LOG.info("Bound {} to {}", readableName, bindAddress);

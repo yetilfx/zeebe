@@ -7,6 +7,8 @@
  */
 package io.zeebe.broker.exporter.repo;
 
+import com.typesafe.config.Config;
+import com.typesafe.config.ConfigObject;
 import io.zeebe.broker.Loggers;
 import io.zeebe.broker.exporter.context.ExporterContext;
 import io.zeebe.broker.exporter.jar.ExporterJarLoadException;
@@ -45,7 +47,7 @@ public class ExporterRepository {
   public ExporterDescriptor load(
       final String id,
       final Class<? extends Exporter> exporterClass,
-      final Map<String, Object> args)
+      final ConfigObject args)
       throws ExporterLoadException {
     ExporterDescriptor descriptor = exporters.get(id);
 

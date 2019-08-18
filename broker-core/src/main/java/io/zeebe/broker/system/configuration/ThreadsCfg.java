@@ -7,23 +7,22 @@
  */
 package io.zeebe.broker.system.configuration;
 
+import com.typesafe.config.Optional;
+
 public class ThreadsCfg implements ConfigurationEntry {
   private int cpuThreadCount = 2;
   private int ioThreadCount = 2;
 
-  public int getCpuThreadCount() {
+  @Optional public int getCpuThreadCount() {
     return cpuThreadCount;
   }
-
-  public void setCpuThreadCount(int cpuThreads) {
+  @Optional public void setCpuThreadCount(int cpuThreads) {
     this.cpuThreadCount = cpuThreads;
   }
-
-  public int getIoThreadCount() {
+  @Optional public int getIoThreadCount() {
     return ioThreadCount;
   }
-
-  public void setIoThreadCount(int ioThreads) {
+  @Optional public void setIoThreadCount(int ioThreads) {
     this.ioThreadCount = ioThreads;
   }
 

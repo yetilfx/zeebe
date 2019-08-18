@@ -31,6 +31,10 @@ import static io.zeebe.broker.system.configuration.NetworkCfg.DEFAULT_MONITORING
 import static io.zeebe.protocol.Protocol.START_PARTITION_ID;
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.typesafe.config.Config;
+import com.typesafe.config.ConfigBeanFactory;
+import com.typesafe.config.ConfigFactory;
+import com.typesafe.config.ConfigValueFactory;
 import io.zeebe.broker.exporter.debug.DebugLogExporter;
 import io.zeebe.broker.system.configuration.BrokerCfg;
 import io.zeebe.broker.system.configuration.ClusterCfg;
@@ -39,9 +43,6 @@ import io.zeebe.broker.system.configuration.EmbeddedGatewayCfg;
 import io.zeebe.broker.system.configuration.ExporterCfg;
 import io.zeebe.broker.system.configuration.NetworkCfg;
 import io.zeebe.util.Environment;
-import io.zeebe.util.TomlConfigurationReader;
-import java.io.ByteArrayInputStream;
-import java.io.InputStream;
 import java.nio.file.Paths;
 import java.util.Arrays;
 import java.util.Collections;
@@ -160,31 +161,30 @@ public class ConfigurationTest {
   @Test
   public void shouldExpandExporterJarPathRelativeToBrokerBaseIffPresent() {
     // given
-    final InputStream input =
-        new ByteArrayInputStream(
-            ("[[exporters]]\n"
-                    + "id=\"external\"\n"
-                    + "jarPath=\"exporters/exporter.jar\"\n"
-                    + "[[exporters]]\n"
-                    + "id=\"internal-1\"\n"
-                    + "jarPath=\"\"\n"
-                    + "[[exporters]]\n"
-                    + "id=\"internal-2\"")
-                .getBytes());
-    final BrokerCfg config = TomlConfigurationReader.read(input, BrokerCfg.class);
+    final Config config =
+        ConfigFactory.load("application.conf")
+            .getConfig("zeebe")
+            .withValue(
+                "exporters",
+                ConfigValueFactory.fromIterable(
+                    List.of(
+                        Map.of("id", "external", "jarPath", "exporters/exporter.jar"),
+                        Map.of("id", "internal-1", "jarPath", ""),
+                        Map.of("id", "internal-2"))));
+    final BrokerCfg brokerCfg = ConfigBeanFactory.create(config, BrokerCfg.class);
     final String base = temporaryFolder.getRoot().getAbsolutePath();
     final String jarFile = Paths.get(base, "exporters", "exporter.jar").toAbsolutePath().toString();
 
     // when
-    config.init(base);
+    brokerCfg.init(base);
 
     // then
-    assertThat(config.getExporters()).hasSize(3);
-    assertThat(config.getExporters().get(0))
+    assertThat(brokerCfg.getExporters()).hasSize(3);
+    assertThat(brokerCfg.getExporters().get(0))
         .hasFieldOrPropertyWithValue("jarPath", jarFile)
         .is(new Condition<>(ExporterCfg::isExternal, "is external"));
-    assertThat(config.getExporters().get(1).isExternal()).isFalse();
-    assertThat(config.getExporters().get(2).isExternal()).isFalse();
+    assertThat(brokerCfg.getExporters().get(1).isExternal()).isFalse();
+    assertThat(brokerCfg.getExporters().get(2).isExternal()).isFalse();
   }
 
   @Test
@@ -433,13 +433,9 @@ public class ConfigurationTest {
   }
 
   private BrokerCfg readConfig(final String name) {
-    final String configPath = "/system/" + name + ".toml";
-    final InputStream resourceAsStream = ConfigurationTest.class.getResourceAsStream(configPath);
-    assertThat(resourceAsStream)
-        .withFailMessage("Unable to read configuration file %s", configPath)
-        .isNotNull();
-
-    final BrokerCfg config = TomlConfigurationReader.read(resourceAsStream, BrokerCfg.class);
+    final String resourcePath = "system/" + name + ".conf";
+    final BrokerCfg config =
+        ConfigBeanFactory.create(ConfigFactory.load(resourcePath).getConfig("zeebe"), BrokerCfg.class);
     config.init(BROKER_BASE, new Environment(environment));
     return config;
   }
@@ -454,7 +450,7 @@ public class ConfigurationTest {
     assertThat(cfg.getCluster().getNodeId()).isEqualTo(nodeId);
   }
 
-  private void assertDefaultClusterName(String clusterName) {
+  private void assertDefaultClusterName(final String clusterName) {
     assertClusterName("default", clusterName);
     assertClusterName("empty", clusterName);
   }
@@ -539,22 +535,22 @@ public class ConfigurationTest {
     assertThat(cfg.getDirectories()).containsExactlyElementsOf(expected);
   }
 
-  private void assertDefaultEmbeddedGatewayEnabled(boolean enabled) {
+  private void assertDefaultEmbeddedGatewayEnabled(final boolean enabled) {
     assertEmbeddedGatewayEnabled("default", enabled);
     assertEmbeddedGatewayEnabled("empty", enabled);
   }
 
-  private void assertEmbeddedGatewayEnabled(String configFileName, boolean enabled) {
+  private void assertEmbeddedGatewayEnabled(final String configFileName, final boolean enabled) {
     final EmbeddedGatewayCfg gatewayCfg = readConfig(configFileName).getGateway();
     assertThat(gatewayCfg.isEnable()).isEqualTo(enabled);
   }
 
-  private void assertDefaultDebugLogExporter(boolean prettyPrint) {
+  private void assertDefaultDebugLogExporter(final boolean prettyPrint) {
     assertDebugLogExporter("default", prettyPrint);
     assertDebugLogExporter("empty", prettyPrint);
   }
 
-  private void assertDebugLogExporter(String configFileName, boolean prettyPrint) {
+  private void assertDebugLogExporter(final String configFileName, final boolean prettyPrint) {
     final ExporterCfg exporterCfg = DebugLogExporter.defaultConfig(prettyPrint);
     final BrokerCfg brokerCfg = readConfig(configFileName);
 
@@ -564,11 +560,11 @@ public class ConfigurationTest {
   }
 
   private void assertDefaultSystemClusterConfiguration(
-      int nodeId,
-      int partitionsCount,
-      int replicationFactor,
-      int clusterSize,
-      List<String> initialContactPoints) {
+      final int nodeId,
+      final int partitionsCount,
+      final int replicationFactor,
+      final int clusterSize,
+      final List<String> initialContactPoints) {
     assertSystemClusterConfiguration(
         "default", nodeId, partitionsCount, replicationFactor, clusterSize, initialContactPoints);
     assertSystemClusterConfiguration(
@@ -576,12 +572,12 @@ public class ConfigurationTest {
   }
 
   private void assertSystemClusterConfiguration(
-      String configFileName,
-      int nodeId,
-      int partitionsCount,
-      int replicationFactor,
-      int clusterSize,
-      List<String> initialContactPoints) {
+      final String configFileName,
+      final int nodeId,
+      final int partitionsCount,
+      final int replicationFactor,
+      final int clusterSize,
+      final List<String> initialContactPoints) {
     final BrokerCfg cfg = readConfig(configFileName);
     final ClusterCfg cfgCluster = cfg.getCluster();
 
