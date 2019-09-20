@@ -7,18 +7,18 @@
  */
 package io.zeebe.logstreams.impl;
 
+import io.atomix.protocols.raft.zeebe.ZeebeEntry;
+import io.atomix.protocols.raft.zeebe.ZeebeLogAppender;
+import io.atomix.storage.journal.Indexed;
 import io.zeebe.dispatcher.BlockPeek;
 import io.zeebe.dispatcher.Subscription;
-import io.zeebe.distributedlog.impl.DistributedLogstreamPartition;
 import io.zeebe.util.sched.Actor;
 import io.zeebe.util.sched.future.ActorFuture;
 import java.nio.ByteBuffer;
 import java.util.concurrent.atomic.AtomicBoolean;
-import org.agrona.DirectBuffer;
-import org.agrona.concurrent.UnsafeBuffer;
 import org.slf4j.Logger;
 
-/** Consume the write buffer and append the blocks to the distributedlog. */
+/** Consume the write buffer and append the blocks to the log */
 public class LogStorageAppender extends Actor {
   public static final Logger LOG = Loggers.LOGSTREAMS_LOGGER;
 
@@ -28,18 +28,17 @@ public class LogStorageAppender extends Actor {
   private final String name;
   private final Subscription writeBufferSubscription;
   private final int maxAppendBlockSize;
-  private final DistributedLogstreamPartition distributedLog;
+  private final ZeebeLogAppender appender;
   private byte[] bytesToAppend;
-  private long commitPosition;
   private final Runnable peekedBlockHandler = this::appendBlock;
 
   public LogStorageAppender(
-      String name,
-      DistributedLogstreamPartition distributedLog,
-      Subscription writeBufferSubscription,
-      int maxBlockSize) {
+      final String name,
+      final ZeebeLogAppender appender,
+      final Subscription writeBufferSubscription,
+      final int maxBlockSize) {
     this.name = name;
-    this.distributedLog = distributedLog;
+    this.appender = appender;
     this.writeBufferSubscription = writeBufferSubscription;
     this.maxAppendBlockSize = maxBlockSize;
   }
@@ -65,48 +64,30 @@ public class LogStorageAppender extends Actor {
 
   private void appendBlock() {
     final ByteBuffer rawBuffer = blockPeek.getRawBuffer();
-
     bytesToAppend = new byte[rawBuffer.remaining()];
     rawBuffer.get(bytesToAppend);
-
-    // Commit position is the position of the last event. DistributedLogstream uses this position
-    // to identify duplicate append requests during recovery.
-    commitPosition = getLastEventPosition(bytesToAppend);
     actor.runUntilDone(this::tryWrite);
   }
 
+  /**
+   * At the moment, the strategy is to run this forever until it succeeds; should be handled in a
+   * more granular fashion, as only a certain class of error is potentially recoverable with time,
+   * i.e. {@link java.io.IOException}. So, for example, an {@link IllegalStateException} will
+   * probably not recover and we should trigger failover.
+   */
   private void tryWrite() {
-    distributedLog.asyncAppend(bytesToAppend, commitPosition);
+    final Indexed<ZeebeEntry> entry;
+    try {
+      entry = appender.appendEntry(bytesToAppend).join();
+    } catch (final RuntimeException e) {
+      LOG.error("Failed to append an entry to the log, retrying...", e);
+      actor.yield();
+      return;
+    }
+
+    LOG.trace("Appended entry {}", entry);
     blockPeek.markCompleted();
     actor.done();
-    /*// TODO: Handle error codes
-    if (res >= 0) {
-      blockPeek.markCompleted();
-      actor.done();
-    } else {
-      // retry
-      LOG.debug("Append failed, retrying");
-      actor.yield();
-    }*/
-  }
-
-  /* Iterate over the events in buffer and find the position of the last event */
-  private long getLastEventPosition(byte[] buffer) {
-    int bufferOffset = 0;
-    final DirectBuffer directBuffer = new UnsafeBuffer(0, 0);
-
-    directBuffer.wrap(buffer);
-    long lastEventPosition = -1;
-
-    final LoggedEventImpl nextEvent = new LoggedEventImpl();
-    int remaining = buffer.length - bufferOffset;
-    while (remaining > 0) {
-      nextEvent.wrap(directBuffer, bufferOffset);
-      bufferOffset += nextEvent.getFragmentLength();
-      lastEventPosition = nextEvent.getPosition();
-      remaining = buffer.length - bufferOffset;
-    }
-    return lastEventPosition;
   }
 
   public ActorFuture<Void> close() {

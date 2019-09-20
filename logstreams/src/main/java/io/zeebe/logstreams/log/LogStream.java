@@ -98,4 +98,6 @@ public interface LogStream extends AutoCloseable {
   void registerOnCommitPositionUpdatedCondition(ActorCondition condition);
 
   void removeOnCommitPositionUpdatedCondition(ActorCondition condition);
+
+  LogStreamReader openReader(long position);
 }

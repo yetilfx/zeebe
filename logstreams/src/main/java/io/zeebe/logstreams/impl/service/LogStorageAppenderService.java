@@ -7,8 +7,8 @@
  */
 package io.zeebe.logstreams.impl.service;
 
+import io.atomix.protocols.raft.zeebe.ZeebeLogAppender;
 import io.zeebe.dispatcher.Subscription;
-import io.zeebe.distributedlog.impl.DistributedLogstreamPartition;
 import io.zeebe.logstreams.impl.LogStorageAppender;
 import io.zeebe.servicecontainer.Injector;
 import io.zeebe.servicecontainer.Service;
@@ -18,33 +18,27 @@ import io.zeebe.util.sched.SchedulingHints;
 
 public class LogStorageAppenderService implements Service<LogStorageAppender> {
   private final Injector<Subscription> appenderSubscriptionInjector = new Injector<>();
-  private final Injector<DistributedLogstreamPartition> distributedLogstreamInjector =
-      new Injector<>();
-
   private final int maxAppendBlockSize;
+  private final ZeebeLogAppender appender;
 
   private LogStorageAppender service;
 
-  public LogStorageAppenderService(int maxAppendBlockSize) {
+  LogStorageAppenderService(final int maxAppendBlockSize, final ZeebeLogAppender appender) {
     this.maxAppendBlockSize = maxAppendBlockSize;
+    this.appender = appender;
   }
 
   @Override
-  public void start(ServiceStartContext startContext) {
-    final Subscription subscription = appenderSubscriptionInjector.getValue();
-
+  public void start(final ServiceStartContext startContext) {
+    final var subscription = appenderSubscriptionInjector.getValue();
     service =
-        new LogStorageAppender(
-            startContext.getName(),
-            distributedLogstreamInjector.getValue(),
-            subscription,
-            maxAppendBlockSize);
+        new LogStorageAppender(startContext.getName(), appender, subscription, maxAppendBlockSize);
 
     startContext.async(startContext.getScheduler().submitActor(service, SchedulingHints.ioBound()));
   }
 
   @Override
-  public void stop(ServiceStopContext stopContext) {
+  public void stop(final ServiceStopContext stopContext) {
     stopContext.async(service.close());
   }
 
@@ -53,11 +47,7 @@ public class LogStorageAppenderService implements Service<LogStorageAppender> {
     return service;
   }
 
-  public Injector<Subscription> getAppenderSubscriptionInjector() {
+  Injector<Subscription> getAppenderSubscriptionInjector() {
     return appenderSubscriptionInjector;
-  }
-
-  public Injector<DistributedLogstreamPartition> getDistributedLogstreamInjector() {
-    return distributedLogstreamInjector;
   }
 }

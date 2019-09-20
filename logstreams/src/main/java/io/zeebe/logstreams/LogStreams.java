@@ -7,9 +7,15 @@
  */
 package io.zeebe.logstreams;
 
+import io.atomix.protocols.raft.partition.impl.RaftPartitionServer;
 import io.zeebe.logstreams.impl.LogStreamBuilder;
+import io.zeebe.logstreams.log.LogStream;
 
 public class LogStreams {
+  public static LogStream createLogStream(final RaftPartitionServer partition) {
+
+  }
+
   public static LogStreamBuilder createFsLogStream(final int partitionId) {
     return new LogStreamBuilder(partitionId).logName(Integer.toString(partitionId));
   }
