@@ -30,24 +30,6 @@ pipeline {
                 container('maven') {
                     sh '.ci/scripts/distribution/prepare.sh'
                 }
-                container('maven-jdk8') {
-                    sh '.ci/scripts/distribution/prepare.sh'
-                }
-
-            }
-        }
-
-        stage('Build (Go)') {
-            steps {
-                container('golang') {
-                    sh '.ci/scripts/distribution/build-go.sh'
-                }
-            }
-
-            post {
-                always {
-                    junit testResults: "**/*/TEST-*.xml", keepLongStdio: true
-                }
             }
         }
 
@@ -73,13 +55,6 @@ pipeline {
                     steps {
                         container('maven') {
                             sh '.ci/scripts/distribution/test-java.sh'
-                        }
-                    }
-                }
-                stage('Unit 8 (Java 8)') {
-                    steps {
-                        container('maven-jdk8') {
-                            sh '.ci/scripts/distribution/test-java8.sh'
                         }
                     }
                 }
@@ -144,9 +119,7 @@ pipeline {
         always {
             // Retrigger the build if there were connection issues
             script {
-                if (connectionProblem()) {
-                    build job: currentBuild.projectName, propagate: false, quietPeriod: 60, wait: false
-                }
+                build job: currentBuild.projectName, propagate: false, quietPeriod: 10, wait: false
             }
         }
     }
