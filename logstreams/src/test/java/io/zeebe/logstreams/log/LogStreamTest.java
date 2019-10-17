@@ -12,13 +12,15 @@ import static io.zeebe.util.buffer.BufferUtil.wrapString;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doThrow;
-import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.timeout;
 import static org.mockito.Mockito.verify;
 
 import io.zeebe.dispatcher.Dispatcher;
 import io.zeebe.logstreams.spi.LogStorage;
+import io.zeebe.logstreams.util.AtomixLogStorageRule;
 import io.zeebe.logstreams.util.LogStreamRule;
+import io.zeebe.servicecontainer.testing.ServiceContainerRule;
+import io.zeebe.util.sched.testing.ActorSchedulerRule;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import org.agrona.DirectBuffer;
@@ -32,15 +34,21 @@ public class LogStreamTest {
   public static final int PARTITION_ID = 0;
 
   private final TemporaryFolder temporaryFolder = new TemporaryFolder();
+  private final ActorSchedulerRule actorSchedulerRule = new ActorSchedulerRule();
+  private final ServiceContainerRule serviceContainerRule =
+      new ServiceContainerRule(actorSchedulerRule);
+  private final AtomixLogStorageRule storageRule = new AtomixLogStorageRule(temporaryFolder);
 
   private final LogStreamRule logStreamRule =
-      LogStreamRule.startByDefault(
-          temporaryFolder,
-          b -> {
-            b.logStorageStubber(logStorage -> spy(logStorage));
-          });
+      LogStreamRule.createStarted(serviceContainerRule, storageRule);
 
-  @Rule public RuleChain ruleChain = RuleChain.outerRule(temporaryFolder).around(logStreamRule);
+  @Rule
+  public RuleChain ruleChain =
+      RuleChain.outerRule(temporaryFolder)
+          .around(actorSchedulerRule)
+          .around(serviceContainerRule)
+          .around(storageRule)
+          .around(logStreamRule);
 
   private LogStream logStream;
   private LogStorage logStorageSpy;
@@ -127,7 +135,7 @@ public class LogStreamTest {
     return writeEvent(logStream, wrapString("event"));
   }
 
-  static long writeEvent(final LogStream logStream, DirectBuffer value) {
+  static long writeEvent(final LogStream logStream, final DirectBuffer value) {
     final LogStreamWriterImpl writer = new LogStreamWriterImpl(logStream);
 
     long position = -1L;

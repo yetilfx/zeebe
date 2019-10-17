@@ -12,7 +12,6 @@ import static io.zeebe.util.buffer.BufferUtil.wrapString;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doReturn;
-import static org.mockito.Mockito.spy;
 
 import io.zeebe.dispatcher.Subscription;
 import io.zeebe.logstreams.impl.LogStorageAppender;
@@ -28,6 +27,7 @@ import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.RuleChain;
 import org.junit.rules.TemporaryFolder;
+import org.mockito.Mockito;
 
 public class LogStorageAppenderTest {
   private static final DirectBuffer EVENT = wrapString("FOO");
@@ -35,11 +35,7 @@ public class LogStorageAppenderTest {
   private final TemporaryFolder temporaryFolder = new TemporaryFolder();
 
   private final LogStreamRule logStreamRule =
-      LogStreamRule.startByDefault(
-          temporaryFolder,
-          b -> {
-            b.logStorageStubber(logStorage -> spy(logStorage));
-          });
+      LogStreamRule.createStarted(temporaryFolder, b -> b.logStorageStubber(Mockito::spy));
 
   private final LogStreamWriterRule writer = new LogStreamWriterRule(logStreamRule);
   private final LogStreamReaderRule reader = new LogStreamReaderRule(logStreamRule);

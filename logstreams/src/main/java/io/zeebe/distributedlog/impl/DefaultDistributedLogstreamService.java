@@ -151,13 +151,9 @@ public class DefaultDistributedLogstreamService
     final File logDirectory = config.getLogDirectory();
 
     return LogStreams.createFsLogStream(partitionId)
-        .logDirectory(logDirectory.getAbsolutePath())
-        .logSegmentSize(config.getLogSegmentSize())
         .maxFragmentSize(config.getMaxFragmentSize())
         .logName(logServiceName)
-        .serviceContainer(serviceContainer)
-        .build()
-        .join();
+        .build();
   }
 
   private void initLastPosition() {

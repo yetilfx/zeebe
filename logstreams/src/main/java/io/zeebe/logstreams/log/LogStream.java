@@ -48,6 +48,13 @@ public interface LogStream extends AutoCloseable {
   long getCommitPosition();
 
   /**
+   * Updates the commit position; does nothing if it is lower than the current commit position.
+   *
+   * @param commitPosition the new commit position
+   */
+  void setCommitPosition(final long commitPosition);
+
+  /**
    * Appends the given block of events to the logstream and updates the commit position.
    *
    * @param commitPosition the new commit position (position of the last event in the given buffer)
@@ -98,6 +105,4 @@ public interface LogStream extends AutoCloseable {
   void registerOnCommitPositionUpdatedCondition(ActorCondition condition);
 
   void removeOnCommitPositionUpdatedCondition(ActorCondition condition);
-
-  LogStreamReader openReader(long position);
 }

@@ -92,13 +92,7 @@ public class DefaultDistributedLogStreamServiceTest {
     @Override
     protected void before() {
       final ServiceContainer serviceContainer = serviceContainerRule.get();
-      final LogStream logStream =
-          LogStreams.createFsLogStream(1)
-              .logDirectory(temporaryFolder.getRoot().getAbsolutePath())
-              .logSegmentSize(512 * 1024 * 1024)
-              .serviceContainer(serviceContainer)
-              .build()
-              .join();
+      final LogStream logStream = LogStreams.createFsLogStream(1).build();
 
       service = new LogService(logStream);
       serviceContainer.createService(LOG_STREAM_SERVICE_NAME, service).install().join();

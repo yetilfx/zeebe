@@ -266,6 +266,18 @@ public class CompletableActorFuture<V> implements ActorFuture<V> {
     }
   }
 
+  public void accept(V result, Throwable error) {
+    if (error != null) {
+      completeExceptionally(error);
+    } else {
+      complete(result);
+    }
+  }
+
+  public void accept(Throwable error) {
+    accept(null, error);
+  }
+
   @Override
   public String toString() {
     return "CompletableActorFuture{"

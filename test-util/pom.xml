@@ -15,6 +15,16 @@
   <dependencies>
     <dependency>
       <groupId>io.zeebe</groupId>
+      <artifactId>atomix-raft</artifactId>
+    </dependency>
+
+    <dependency>
+      <groupId>io.zeebe</groupId>
+      <artifactId>atomix-cluster</artifactId>
+    </dependency>
+
+    <dependency>
+      <groupId>io.zeebe</groupId>
       <artifactId>zeebe-util</artifactId>
     </dependency>
 

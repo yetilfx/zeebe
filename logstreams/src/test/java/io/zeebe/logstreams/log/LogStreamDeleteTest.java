@@ -33,7 +33,7 @@ public class LogStreamDeleteTest {
   private final TemporaryFolder temporaryFolder = new TemporaryFolder();
 
   private final LogStreamRule logStreamRule =
-      LogStreamRule.createRuleWithoutStarting(temporaryFolder);
+      LogStreamRule.createStopped(temporaryFolder);
 
   @Rule public RuleChain ruleChain = RuleChain.outerRule(temporaryFolder).around(logStreamRule);
 
@@ -41,7 +41,7 @@ public class LogStreamDeleteTest {
   public void shouldDeleteOnClose() {
     final File logDir = temporaryFolder.getRoot();
     final LogStream logStream =
-        logStreamRule.startLogStreamWithConfiguration(
+        logStreamRule.start(
             b -> b.logRootPath(logDir.getAbsolutePath()).deleteOnClose(true));
 
     // when
@@ -56,7 +56,7 @@ public class LogStreamDeleteTest {
   public void shouldNotDeleteOnCloseByDefault() {
     final File logDir = temporaryFolder.getRoot();
     final LogStream logStream =
-        logStreamRule.startLogStreamWithConfiguration(b -> b.logRootPath(logDir.getAbsolutePath()));
+        logStreamRule.start(b -> b.logRootPath(logDir.getAbsolutePath()));
 
     // when
     logStream.close();
@@ -110,7 +110,7 @@ public class LogStreamDeleteTest {
             - alignedLength(HEADER_BLOCK_LENGTH + 2 + 8)
             - 1);
     final LogStream logStream =
-        logStreamRule.startLogStreamWithConfiguration(
+        logStreamRule.start(
             c -> c.logSegmentSize(segmentSize).maxFragmentSize(segmentSize));
     final byte[] largeEvent = new byte[remainingCapacity];
 

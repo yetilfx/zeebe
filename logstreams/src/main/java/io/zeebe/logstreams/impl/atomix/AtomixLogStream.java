@@ -1,20 +1,32 @@
 package io.zeebe.logstreams.impl.atomix;
 
 import io.atomix.protocols.raft.partition.RaftPartition;
+import io.atomix.storage.journal.index.SparseJournalIndex;
 import io.zeebe.dispatcher.Dispatcher;
 import io.zeebe.logstreams.impl.LogStorageAppender;
 import io.zeebe.logstreams.log.LogStream;
+import io.zeebe.logstreams.log.LogStreamReader;
 import io.zeebe.logstreams.spi.LogStorage;
+import io.zeebe.servicecontainer.Service;
 import io.zeebe.util.sched.ActorCondition;
 import io.zeebe.util.sched.future.ActorFuture;
 import io.zeebe.util.sched.future.CompletableActorFuture;
 import java.nio.ByteBuffer;
 
-public class AtomixLogStream implements LogStream {
+public class AtomixLogStream implements LogStream, Service<LogStream> {
   private final RaftPartition partition;
+
+  // when in read-write mode, these fields are non-null
+  private Dispatcher dispatcher;
+  private LogStorageAppender appender;
 
   public AtomixLogStream(final RaftPartition partition) {
     this.partition = partition;
+  }
+
+  @Override
+  public LogStream get() {
+    return this;
   }
 
   @Override
@@ -38,8 +50,12 @@ public class AtomixLogStream implements LogStream {
   }
 
   @Override
+  public LogStreamReader openReader(final long position) {
+    return null;
+  }
+
+  @Override
   public long getCommitPosition() {
-    // TODO
     return -1;
   }
 
@@ -57,21 +73,30 @@ public class AtomixLogStream implements LogStream {
 
   @Override
   public Dispatcher getWriteBuffer() {
-    return null;
+    return dispatcher;
   }
 
   @Override
   public LogStorageAppender getLogStorageAppender() {
-    return null;
+    return appender;
   }
 
   @Override
   public ActorFuture<Void> closeAppender() {
-    return null;
+    if (appender == null) {
+      return CompletableActorFuture.completed(null);
+    }
+
+    return appender.close();
   }
 
   @Override
   public ActorFuture<LogStorageAppender> openAppender() {
+    if (appender != null) {
+      return CompletableActorFuture.completed(appender);
+    }
+
+    appender = new LogStorageAppender(getLogName(), null, null, 1024);
     return null;
   }
 

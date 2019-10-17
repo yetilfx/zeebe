@@ -7,108 +7,73 @@
  */
 package io.zeebe.logstreams.util;
 
-import static io.zeebe.logstreams.impl.service.LogStreamServiceNames.distributedLogPartitionServiceName;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyLong;
-import static org.mockito.Mockito.doAnswer;
-import static org.mockito.Mockito.mock;
+import static io.zeebe.logstreams.impl.service.LogStreamServiceNames.logStreamServiceName;
 
-import io.zeebe.distributedlog.DistributedLogstreamService;
-import io.zeebe.distributedlog.impl.DefaultDistributedLogstreamService;
-import io.zeebe.distributedlog.impl.DistributedLogstreamPartition;
-import io.zeebe.logstreams.LogStreams;
 import io.zeebe.logstreams.impl.LogStreamBuilder;
+import io.zeebe.logstreams.impl.service.LogStreamService;
 import io.zeebe.logstreams.log.BufferedLogStreamReader;
 import io.zeebe.logstreams.log.LogStream;
 import io.zeebe.logstreams.log.LogStreamReader;
+import io.zeebe.logstreams.spi.LogStorage;
 import io.zeebe.servicecontainer.ServiceContainer;
-import io.zeebe.servicecontainer.impl.ServiceContainerImpl;
-import io.zeebe.util.sched.ActorScheduler;
-import io.zeebe.util.sched.clock.ControlledActorClock;
-import io.zeebe.util.sched.testing.ActorSchedulerRule;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
-import java.util.function.Consumer;
+import io.zeebe.servicecontainer.testing.ServiceContainerRule;
+import java.util.Objects;
 import org.junit.rules.ExternalResource;
-import org.junit.rules.TemporaryFolder;
-import org.mockito.internal.util.reflection.FieldSetter;
-import org.mockito.stubbing.Answer;
 
 public final class LogStreamRule extends ExternalResource {
-  private final TemporaryFolder temporaryFolder;
-  private final ControlledActorClock clock = new ControlledActorClock();
-  private Consumer<LogStreamBuilder> streamBuilder;
-  private ActorScheduler actorScheduler;
-  private ServiceContainer serviceContainer;
-  private LogStream logStream;
+  private final ServiceContainerRule serviceContainer;
+  private final AtomixLogStorageRule storage;
+  private final boolean shouldStart;
+
+  private LogStreamService logStream;
   private BufferedLogStreamReader logStreamReader;
-  private DistributedLogstreamService distributedLogImpl;
-  private LogStreamBuilder builder;
-  private ActorSchedulerRule actorSchedulerRule;
-  private final boolean shouldStartByDefault;
 
   private LogStreamRule(
-      final TemporaryFolder temporaryFolder,
-      final boolean shouldStart,
-      final Consumer<LogStreamBuilder> streamBuilder) {
-    this.temporaryFolder = temporaryFolder;
-    this.shouldStartByDefault = shouldStart;
-    this.streamBuilder = streamBuilder;
+      final ServiceContainerRule serviceContainer,
+      final AtomixLogStorageRule storage,
+      final boolean shouldStart) {
+    this.serviceContainer = serviceContainer;
+    this.storage = storage;
+    this.shouldStart = shouldStart;
   }
 
-  public static LogStreamRule startByDefault(
-      final TemporaryFolder temporaryFolder, final Consumer<LogStreamBuilder> streamBuilder) {
-    return new LogStreamRule(temporaryFolder, true, streamBuilder);
+  public static LogStreamRule createStarted(
+      final ServiceContainerRule serviceContainer, final AtomixLogStorageRule storage) {
+    return new LogStreamRule(serviceContainer, storage, true);
   }
 
-  public static LogStreamRule startByDefault(final TemporaryFolder temporaryFolder) {
-    return new LogStreamRule(temporaryFolder, true, b -> {});
-  }
-
-  public static LogStreamRule createRuleWithoutStarting(final TemporaryFolder temporaryFolder) {
-    return new LogStreamRule(temporaryFolder, false, b -> {});
-  }
-
-  public LogStream startLogStreamWithConfiguration(Consumer<LogStreamBuilder> streamBuilder) {
-    this.streamBuilder = streamBuilder;
-    startLogStream();
-    return logStream;
+  public static LogStreamRule createStopped(
+      final ServiceContainerRule serviceContainer, final AtomixLogStorageRule storage) {
+    return new LogStreamRule(serviceContainer, storage, false);
   }
 
   @Override
   protected void before() {
-    actorSchedulerRule = new ActorSchedulerRule(clock);
-    actorSchedulerRule.before();
-
-    if (shouldStartByDefault) {
-      startLogStream();
+    if (shouldStart) {
+      start(buildDefaultLogStream(storage.get()));
     }
   }
 
   @Override
   protected void after() {
     stopLogStream();
-
-    actorSchedulerRule.after();
   }
 
-  public void startLogStream() {
-    actorScheduler = actorSchedulerRule.get();
+  public LogStream start(final LogStreamBuilder builder) {
+    this.logStream = builder.build();
+    start();
 
-    serviceContainer = new ServiceContainerImpl(actorScheduler);
-    serviceContainer.start();
+    return logStream;
+  }
 
-    builder =
-        LogStreams.createFsLogStream(0)
-            .logDirectory(temporaryFolder.getRoot().getAbsolutePath())
-            .serviceContainer(serviceContainer);
+  public LogStream start() {
+    getServiceContainer()
+        .createService(logStreamServiceName(logStream.getLogName()), logStream)
+        .install()
+        .join();
 
-    // apply additional configs
-    streamBuilder.accept(builder);
-
-    openLogStream();
+    logStream.openAppender().join();
+    return logStream;
   }
 
   public void stopLogStream() {
@@ -120,72 +85,15 @@ public final class LogStreamRule extends ExternalResource {
       logStreamReader.close();
       logStreamReader = null;
     }
-
-    try {
-      serviceContainer.close(5, TimeUnit.SECONDS);
-    } catch (final TimeoutException | ExecutionException | InterruptedException e) {
-      e.printStackTrace();
-    }
-  }
-
-  private void openDistributedLog() {
-    final DistributedLogstreamPartition mockDistLog = mock(DistributedLogstreamPartition.class);
-    distributedLogImpl = new DefaultDistributedLogstreamService();
-
-    final String nodeId = "0";
-    try {
-      FieldSetter.setField(
-          distributedLogImpl,
-          DefaultDistributedLogstreamService.class.getDeclaredField("logStream"),
-          logStream);
-
-      FieldSetter.setField(
-          distributedLogImpl,
-          DefaultDistributedLogstreamService.class.getDeclaredField("currentLeader"),
-          nodeId);
-
-    } catch (NoSuchFieldException e) {
-      e.printStackTrace();
-    }
-
-    doAnswer(
-            (Answer<CompletableFuture<Long>>)
-                invocation -> {
-                  final Object[] arguments = invocation.getArguments();
-                  if (arguments != null
-                      && arguments.length > 1
-                      && arguments[0] != null
-                      && arguments[1] != null) {
-                    final byte[] bytes = (byte[]) arguments[0];
-                    final long pos = (long) arguments[1];
-                    return CompletableFuture.completedFuture(
-                        distributedLogImpl.append(nodeId, pos, bytes));
-                  }
-                  return null;
-                })
-        .when(mockDistLog)
-        .asyncAppend(any(), anyLong());
-
-    serviceContainer
-        .createService(distributedLogPartitionServiceName(builder.getLogName()), () -> mockDistLog)
-        .install()
-        .join();
-  }
-
-  public void openLogStream() {
-    logStream = builder.build().join();
-    openDistributedLog();
-    logStream.openAppender().join();
   }
 
   public LogStreamReader getLogStreamReader() {
-    if (logStream == null) {
-      throw new IllegalStateException("Log stream is not open!");
-    }
+    Objects.requireNonNull(logStream, "logStream is not started yet");
 
     if (logStreamReader == null) {
       logStreamReader = new BufferedLogStreamReader();
     }
+
     logStreamReader.wrap(logStream);
     return logStreamReader;
   }
@@ -194,15 +102,11 @@ public final class LogStreamRule extends ExternalResource {
     return logStream;
   }
 
-  public ControlledActorClock getClock() {
-    return clock;
-  }
-
-  public ActorScheduler getActorScheduler() {
-    return actorScheduler;
-  }
-
   public ServiceContainer getServiceContainer() {
-    return serviceContainer;
+    return serviceContainer.get();
+  }
+
+  public static LogStreamBuilder buildDefaultLogStream(final LogStorage storage) {
+    return new LogStreamBuilder(0).logStorage(storage);
   }
 }

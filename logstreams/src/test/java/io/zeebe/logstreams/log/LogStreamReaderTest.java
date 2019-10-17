@@ -37,7 +37,7 @@ public class LogStreamReaderTest {
   @Rule public ExpectedException expectedException = ExpectedException.none();
   public TemporaryFolder temporaryFolder = new TemporaryFolder();
   public LogStreamRule logStreamRule =
-      LogStreamRule.startByDefault(
+      LogStreamRule.createStarted(
           temporaryFolder, builder -> builder.logSegmentSize(LOG_SEGMENT_SIZE));
   public LogStreamWriterRule writer = new LogStreamWriterRule(logStreamRule);
   public LogStreamReaderRule readerRule = new LogStreamReaderRule(logStreamRule);

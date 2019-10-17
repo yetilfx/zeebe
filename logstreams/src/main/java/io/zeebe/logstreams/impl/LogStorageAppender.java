@@ -7,40 +7,61 @@
  */
 package io.zeebe.logstreams.impl;
 
-import io.atomix.protocols.raft.zeebe.ZeebeEntry;
-import io.atomix.protocols.raft.zeebe.ZeebeLogAppender;
-import io.atomix.storage.journal.Indexed;
 import io.zeebe.dispatcher.BlockPeek;
+import io.zeebe.dispatcher.Dispatcher;
+import io.zeebe.dispatcher.Dispatchers;
 import io.zeebe.dispatcher.Subscription;
+import io.zeebe.dispatcher.impl.PositionUtil;
+import io.zeebe.logstreams.log.BufferedLogStreamReader;
+import io.zeebe.logstreams.spi.LogStorage;
+import io.zeebe.servicecontainer.Service;
+import io.zeebe.servicecontainer.ServiceStartContext;
+import io.zeebe.servicecontainer.ServiceStopContext;
 import io.zeebe.util.sched.Actor;
 import io.zeebe.util.sched.future.ActorFuture;
-import java.nio.ByteBuffer;
+import java.io.IOException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import org.slf4j.Logger;
 
 /** Consume the write buffer and append the blocks to the log */
-public class LogStorageAppender extends Actor {
+public class LogStorageAppender extends Actor implements Service<LogStorageAppender> {
   public static final Logger LOG = Loggers.LOGSTREAMS_LOGGER;
 
   private final AtomicBoolean isFailed = new AtomicBoolean(false);
 
   private final BlockPeek blockPeek = new BlockPeek();
-  private final String name;
-  private final Subscription writeBufferSubscription;
-  private final int maxAppendBlockSize;
-  private final ZeebeLogAppender appender;
-  private byte[] bytesToAppend;
-  private final Runnable peekedBlockHandler = this::appendBlock;
+  private final int maxFrameLength;
+  private final LogStorage storage;
 
-  public LogStorageAppender(
-      final String name,
-      final ZeebeLogAppender appender,
-      final Subscription writeBufferSubscription,
-      final int maxBlockSize) {
-    this.name = name;
-    this.appender = appender;
-    this.writeBufferSubscription = writeBufferSubscription;
-    this.maxAppendBlockSize = maxBlockSize;
+  private String name;
+  private Dispatcher writeBuffer;
+  private Subscription subscription;
+  private ServiceStartContext serviceContext;
+
+  public LogStorageAppender(final LogStorage storage, final int maxBlockSize) {
+    this.storage = storage;
+    this.maxFrameLength = maxBlockSize;
+  }
+
+  public Dispatcher getWriteBuffer() {
+    return writeBuffer;
+  }
+
+  @Override
+  public void start(final ServiceStartContext startContext) {
+    serviceContext = startContext;
+    name = serviceContext.getName();
+    serviceContext.async(serviceContext.getScheduler().submitActor(this));
+  }
+
+  @Override
+  public void stop(final ServiceStopContext stopContext) {
+    stopContext.async(actor.close());
+  }
+
+  @Override
+  public LogStorageAppender get() {
+    return this;
   }
 
   @Override
@@ -50,23 +71,53 @@ public class LogStorageAppender extends Actor {
 
   @Override
   protected void onActorStarting() {
+    writeBuffer = createWriteBuffer();
+    actor.runOnCompletion(writeBuffer.getSubscriptionAsync(getName()), this::onSubscriptionOpened);
+  }
 
-    actor.consume(writeBufferSubscription, this::peekBlock);
+  @Override
+  protected void onActorClosing() {
+    actor.runOnCompletion(
+        writeBuffer.closeAsync(),
+        (nothing, error) -> {
+          if (error != null) {
+            LOG.error("Failed to close write buffer", error);
+          }
+
+          writeBuffer = null;
+          subscription = null;
+        });
+  }
+
+  public ActorFuture<Void> close() {
+    return serviceContext.removeService(serviceContext.getServiceName());
+  }
+
+  public boolean isFailed() {
+    return isFailed.get();
+  }
+
+  public long getCurrentAppenderPosition() {
+    return subscription.getPosition();
+  }
+
+  private void onSubscriptionOpened(final Subscription subscription, final Throwable error) {
+    if (error != null) {
+      LOG.error("Failed to open write buffer subscription, closing appender", error);
+      close();
+      return;
+    }
+
+    this.subscription = subscription;
+    this.actor.consume(this.subscription, this::peekBlock);
   }
 
   private void peekBlock() {
-    if (writeBufferSubscription.peekBlock(blockPeek, maxAppendBlockSize, true) > 0) {
-      peekedBlockHandler.run();
+    if (subscription.peekBlock(blockPeek, maxFrameLength, true) > 0) {
+      actor.runUntilDone(this::tryWrite);
     } else {
       actor.yield();
     }
-  }
-
-  private void appendBlock() {
-    final ByteBuffer rawBuffer = blockPeek.getRawBuffer();
-    bytesToAppend = new byte[rawBuffer.remaining()];
-    rawBuffer.get(bytesToAppend);
-    actor.runUntilDone(this::tryWrite);
   }
 
   /**
@@ -76,29 +127,41 @@ public class LogStorageAppender extends Actor {
    * probably not recover and we should trigger failover.
    */
   private void tryWrite() {
-    final Indexed<ZeebeEntry> entry;
     try {
-      entry = appender.appendEntry(bytesToAppend).join();
-    } catch (final RuntimeException e) {
+      final var index = storage.append(blockPeek.getRawBuffer().slice());
+      LOG.trace("Appended entry {}", index);
+      blockPeek.markCompleted();
+      actor.done();
+    } catch (final IOException | RuntimeException e) {
       LOG.error("Failed to append an entry to the log, retrying...", e);
       actor.yield();
-      return;
     }
-
-    LOG.trace("Appended entry {}", entry);
-    blockPeek.markCompleted();
-    actor.done();
   }
 
-  public ActorFuture<Void> close() {
-    return actor.close();
+  private Dispatcher createWriteBuffer() {
+    final var dispatcherName = String.format("logstream.%s.writeBuffer", getName());
+    return Dispatchers.create(dispatcherName)
+        .maxFragmentLength(maxFrameLength)
+        .initialPartitionId(determineInitialPartitionId() + 1)
+        .actorScheduler(serviceContext.getScheduler())
+        .build();
   }
 
-  public boolean isFailed() {
-    return isFailed.get();
-  }
+  private int determineInitialPartitionId() {
+    try (final BufferedLogStreamReader logReader = new BufferedLogStreamReader()) {
+      logReader.wrap(storage);
 
-  public long getCurrentAppenderPosition() {
-    return writeBufferSubscription.getPosition();
+      // Get position of last entry
+      final long lastPosition = logReader.seekToEnd();
+
+      // dispatcher needs to generate positions greater than the last position
+      int lastPartitionId = 0;
+
+      if (lastPosition > 0) {
+        lastPartitionId = PositionUtil.partitionId(lastPosition);
+      }
+
+      return lastPartitionId;
+    }
   }
 }

@@ -94,6 +94,11 @@ public class DispatcherBuilder {
     return this;
   }
 
+  public DispatcherBuilder maxFragmentLength(final int maxFragmentLength) {
+    this.maxFragmentLength = maxFragmentLength;
+    return this;
+  }
+
   /** The max length of the data section of a frame */
   public DispatcherBuilder maxFragmentLength(final ByteValue maxFragmentLength) {
     this.maxFragmentLength = (int) maxFragmentLength.toBytes();

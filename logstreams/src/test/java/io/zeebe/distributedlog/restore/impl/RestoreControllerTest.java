@@ -49,13 +49,13 @@ public class RestoreControllerTest {
 
   private final TemporaryFolder temporaryFolderClient = new TemporaryFolder();
   private final LogStreamRule logStreamRuleClient =
-      LogStreamRule.startByDefault(temporaryFolderClient);
+      LogStreamRule.createStarted(temporaryFolderClient);
   private final LogStreamWriterRule writerClient = new LogStreamWriterRule(logStreamRuleClient);
   private final LogStreamReaderRule readerClient = new LogStreamReaderRule(logStreamRuleClient);
 
   private final TemporaryFolder temporaryFolderServer = new TemporaryFolder();
   private final LogStreamRule logStreamRuleServer =
-      LogStreamRule.startByDefault(temporaryFolderServer);
+      LogStreamRule.createStarted(temporaryFolderServer);
   private final LogStreamWriterRule writerServer = new LogStreamWriterRule(logStreamRuleServer);
   private final LogStreamReaderRule readerServer = new LogStreamReaderRule(logStreamRuleServer);
 
