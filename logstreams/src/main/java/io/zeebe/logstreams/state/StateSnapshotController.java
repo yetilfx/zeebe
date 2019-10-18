@@ -259,6 +259,10 @@ public class StateSnapshotController implements SnapshotController, ValidSnapsho
       LOG.error(ERROR_MSG_ENSURING_MAX_SNAPSHOT_COUNT, e);
     }
 
+    notifyDeletionService();
+  }
+
+  public void notifyDeletionService() {
     if (getValidSnapshotsCount() >= maxSnapshotCount) {
       deletionService.delete(getPositionToDelete(maxSnapshotCount));
     }

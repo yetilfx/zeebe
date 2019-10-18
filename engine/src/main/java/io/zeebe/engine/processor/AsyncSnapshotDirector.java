@@ -104,9 +104,12 @@ public class AsyncSnapshotDirector extends Actor {
               takeSnapshot();
             } else {
               LOG.debug(
-                  "No changes since last snapshot we will skip snapshot creation. Last valid snapshot position {}, new lower bound position {}",
+                  "No changes since last snapshot we will skip snapshot creation. "
+                      + "Last valid snapshot position {}, new lower bound position {}."
+                      + " Deletion service will be notified it maybe we can release some data.",
                   lastValidSnapshotPosition,
                   lowerBoundSnapshotPosition);
+              snapshotController.notifyDeletionService();
             }
 
           } else {

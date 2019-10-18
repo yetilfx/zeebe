@@ -88,4 +88,7 @@ public interface SnapshotController extends AutoCloseable {
    * the latest valid snapshot
    */
   SnapshotRestoreInfo getLatestSnapshotRestoreInfo();
+
+  /** Notifies the deletion service that it might make sense to compact the log. */
+  void notifyDeletionService();
 }
