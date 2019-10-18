@@ -256,6 +256,7 @@ public class AsyncSnapshotingTest {
 
     // then
     inOrder.verify(mockStreamProcessor, TIMEOUT).getLastProcessedPositionAsync();
+    inOrder.verify(snapshotController, TIMEOUT).notifyDeletionService();
     inOrder.verifyNoMoreInteractions();
   }
 
