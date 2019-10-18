@@ -97,8 +97,8 @@ public class AtomixService implements Service<Atomix> {
             .withMembers(getRaftGroupMembers(clusterCfg))
             .withDataDirectory(systemDirectory)
             .withFlushOnCommit()
-            .withElectionTimeout(Duration.ofMillis(ThreadLocalRandom.current().nextInt(150, 300)))
-            .withHeartbeatInterval(Duration.ofMillis(100L))
+            .withElectionTimeout(Duration.ofMillis(ThreadLocalRandom.current().nextInt(500, 1000)))
+            .withHeartbeatInterval(Duration.ofMillis(50L))
             .build();
 
     final String raftPartitionGroupName = Partition.GROUP_NAME;
@@ -153,8 +153,8 @@ public class AtomixService implements Service<Atomix> {
             .withPartitionSize(clusterCfg.getReplicationFactor())
             .withMembers(getRaftGroupMembers(clusterCfg))
             .withDataDirectory(raftDirectory)
-            .withElectionTimeout(Duration.ofMillis(ThreadLocalRandom.current().nextInt(150, 300)))
-            .withHeartbeatInterval(Duration.ofMillis(100L))
+            .withElectionTimeout(Duration.ofMillis(ThreadLocalRandom.current().nextInt(500, 1000)))
+            .withHeartbeatInterval(Duration.ofMillis(50L))
             .withFlushOnCommit();
 
     // by default, the Atomix max entry size is 1 MB
