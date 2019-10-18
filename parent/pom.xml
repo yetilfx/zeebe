@@ -1,4 +1,6 @@
-<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
 
   <modelVersion>4.0.0</modelVersion>
   <name>Zeebe Parent</name>
@@ -38,7 +40,7 @@
     <version.agrona>1.0.8</version.agrona>
     <version.animal-sniffer>1.18</version.animal-sniffer>
     <version.assertj>3.13.2</version.assertj>
-    <version.atomix>3.2.0-alpha6</version.atomix>
+    <version.atomix>3.2.0-alpha7</version.atomix>
     <version.camunda>7.10.0</version.camunda>
     <version.commons-lang>3.9</version.commons-lang>
     <version.commons-logging>1.2</version.commons-logging>
@@ -800,7 +802,7 @@
                     </goals>
                   </pluginExecutionFilter>
                   <action>
-                    <ignore />
+                    <ignore/>
                   </action>
                 </pluginExecution>
               </pluginExecutions>
@@ -893,7 +895,7 @@
               </goals>
               <configuration>
                 <rules>
-                  <dependencyConvergence />
+                  <dependencyConvergence/>
                 </rules>
               </configuration>
             </execution>

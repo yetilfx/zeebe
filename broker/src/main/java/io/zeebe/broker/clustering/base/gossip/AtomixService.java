@@ -33,10 +33,12 @@ import io.zeebe.util.sched.future.CompletableActorFuture;
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ThreadLocalRandom;
 import org.slf4j.Logger;
 
 public class AtomixService implements Service<Atomix> {
@@ -95,6 +97,8 @@ public class AtomixService implements Service<Atomix> {
             .withMembers(getRaftGroupMembers(clusterCfg))
             .withDataDirectory(systemDirectory)
             .withFlushOnCommit()
+            .withElectionTimeout(Duration.ofMillis(ThreadLocalRandom.current().nextInt(150, 300)))
+            .withHeartbeatInterval(Duration.ofMillis(100L))
             .build();
 
     final String raftPartitionGroupName = Partition.GROUP_NAME;
@@ -149,6 +153,8 @@ public class AtomixService implements Service<Atomix> {
             .withPartitionSize(clusterCfg.getReplicationFactor())
             .withMembers(getRaftGroupMembers(clusterCfg))
             .withDataDirectory(raftDirectory)
+            .withElectionTimeout(Duration.ofMillis(ThreadLocalRandom.current().nextInt(150, 300)))
+            .withHeartbeatInterval(Duration.ofMillis(100L))
             .withFlushOnCommit();
 
     // by default, the Atomix max entry size is 1 MB
