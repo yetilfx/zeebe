@@ -72,7 +72,7 @@ public class LogStorageAppender extends Actor implements Service<LogStorageAppen
   @Override
   protected void onActorStarting() {
     writeBuffer = createWriteBuffer();
-    actor.runOnCompletion(writeBuffer.getSubscriptionAsync(getName()), this::onSubscriptionOpened);
+    actor.runOnCompletion(writeBuffer.openSubscriptionAsync(getName()), this::onSubscriptionOpened);
   }
 
   @Override

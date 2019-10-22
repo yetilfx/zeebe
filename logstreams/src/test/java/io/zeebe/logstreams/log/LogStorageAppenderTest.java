@@ -16,6 +16,7 @@ import static org.mockito.Mockito.doReturn;
 import io.zeebe.dispatcher.Subscription;
 import io.zeebe.logstreams.impl.LogStorageAppender;
 import io.zeebe.logstreams.spi.LogStorage;
+import io.zeebe.logstreams.util.AtomixLogStorageRule;
 import io.zeebe.logstreams.util.LogStreamReaderRule;
 import io.zeebe.logstreams.util.LogStreamRule;
 import io.zeebe.logstreams.util.LogStreamWriterRule;
@@ -27,22 +28,24 @@ import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.RuleChain;
 import org.junit.rules.TemporaryFolder;
-import org.mockito.Mockito;
 
 public class LogStorageAppenderTest {
   private static final DirectBuffer EVENT = wrapString("FOO");
 
   private final TemporaryFolder temporaryFolder = new TemporaryFolder();
-
-  private final LogStreamRule logStreamRule =
-      LogStreamRule.createStarted(temporaryFolder, b -> b.logStorageStubber(Mockito::spy));
+  private final AtomixLogStorageRule storageRule = new AtomixLogStorageRule(temporaryFolder);
+  private LogStreamRule logStreamRule = LogStreamRule.createStarted(storageRule);
 
   private final LogStreamWriterRule writer = new LogStreamWriterRule(logStreamRule);
   private final LogStreamReaderRule reader = new LogStreamReaderRule(logStreamRule);
 
   @Rule
   public RuleChain ruleChain =
-      RuleChain.outerRule(temporaryFolder).around(logStreamRule).around(reader).around(writer);
+      RuleChain.outerRule(temporaryFolder)
+          .around(storageRule)
+          .around(logStreamRule)
+          .around(reader)
+          .around(writer);
 
   private LogStream logStream;
   private LogStorage logStorageSpy;
@@ -50,7 +53,8 @@ public class LogStorageAppenderTest {
   @Before
   public void setup() {
     logStream = logStreamRule.getLogStream();
-    logStorageSpy = logStream.getLogStorage();
+    storageRule.setLogStream(logStream);
+    logStorageSpy = storageRule.getLogStorage();
   }
 
   @Test

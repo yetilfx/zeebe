@@ -17,12 +17,14 @@ import io.zeebe.logstreams.log.LogStreamReader;
 import io.zeebe.logstreams.spi.LogStorage;
 import io.zeebe.servicecontainer.ServiceContainer;
 import io.zeebe.servicecontainer.testing.ServiceContainerRule;
+import io.zeebe.util.sched.testing.ActorSchedulerRule;
 import java.util.Objects;
+import java.util.function.Supplier;
 import org.junit.rules.ExternalResource;
 
 public final class LogStreamRule extends ExternalResource {
   private final ServiceContainerRule serviceContainer;
-  private final AtomixLogStorageRule storage;
+  private final Supplier<LogStorage> storage;
   private final boolean shouldStart;
 
   private LogStreamService logStream;
@@ -30,25 +32,30 @@ public final class LogStreamRule extends ExternalResource {
 
   private LogStreamRule(
       final ServiceContainerRule serviceContainer,
-      final AtomixLogStorageRule storage,
+      final Supplier<LogStorage> storage,
       final boolean shouldStart) {
     this.serviceContainer = serviceContainer;
     this.storage = storage;
     this.shouldStart = shouldStart;
   }
 
-  public static LogStreamRule createStarted(
-      final ServiceContainerRule serviceContainer, final AtomixLogStorageRule storage) {
-    return new LogStreamRule(serviceContainer, storage, true);
+  private LogStreamRule(final Supplier<LogStorage> storage, final boolean shouldStart) {
+    this(new ServiceContainerRule(new ActorSchedulerRule()), storage, shouldStart);
   }
 
-  public static LogStreamRule createStopped(
-      final ServiceContainerRule serviceContainer, final AtomixLogStorageRule storage) {
-    return new LogStreamRule(serviceContainer, storage, false);
+  public static LogStreamRule createStarted(final Supplier<LogStorage> storage) {
+    return new LogStreamRule(storage, true);
+  }
+
+  public static LogStreamRule createStopped(final Supplier<LogStorage> storage) {
+    return new LogStreamRule(storage, false);
   }
 
   @Override
-  protected void before() {
+  public void before() throws Throwable {
+    serviceContainer.getActorSchedulerRule().before();
+    serviceContainer.before();
+
     if (shouldStart) {
       start(buildDefaultLogStream(storage.get()));
     }
@@ -57,10 +64,12 @@ public final class LogStreamRule extends ExternalResource {
   @Override
   protected void after() {
     stopLogStream();
+    serviceContainer.after();
+    serviceContainer.getActorSchedulerRule().after();
   }
 
   public LogStream start(final LogStreamBuilder builder) {
-    this.logStream = builder.build();
+    logStream = builder.build();
     start();
 
     return logStream;
@@ -107,6 +116,6 @@ public final class LogStreamRule extends ExternalResource {
   }
 
   public static LogStreamBuilder buildDefaultLogStream(final LogStorage storage) {
-    return new LogStreamBuilder(0).logStorage(storage);
+    return new LogStreamBuilder(0).logName("log-0").maxBlockSize(512 * 1024).logStorage(storage);
   }
 }

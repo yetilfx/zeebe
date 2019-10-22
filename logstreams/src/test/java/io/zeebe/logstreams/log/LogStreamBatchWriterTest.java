@@ -12,6 +12,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import io.zeebe.logstreams.impl.LoggedEventImpl;
+import io.zeebe.logstreams.util.AtomixLogStorageRule;
 import io.zeebe.logstreams.util.LogStreamReaderRule;
 import io.zeebe.logstreams.util.LogStreamRule;
 import io.zeebe.logstreams.util.LogStreamWriterRule;
@@ -43,14 +44,16 @@ public class LogStreamBatchWriterTest {
 
   @Rule public ExpectedException expectedException = ExpectedException.none();
 
-  public TemporaryFolder temporaryFolder = new TemporaryFolder();
-  public LogStreamRule logStreamRule = LogStreamRule.createStarted(temporaryFolder);
-  public LogStreamReaderRule readerRule = new LogStreamReaderRule(logStreamRule);
-  public LogStreamWriterRule writerRule = new LogStreamWriterRule(logStreamRule);
+  private final TemporaryFolder temporaryFolder = new TemporaryFolder();
+  private final AtomixLogStorageRule storageRule = new AtomixLogStorageRule(temporaryFolder);
+  private LogStreamRule logStreamRule = LogStreamRule.createStarted(storageRule);
+  private LogStreamReaderRule readerRule = new LogStreamReaderRule(logStreamRule);
+  private LogStreamWriterRule writerRule = new LogStreamWriterRule(logStreamRule);
 
   @Rule
   public RuleChain ruleChain =
       RuleChain.outerRule(temporaryFolder)
+          .around(storageRule)
           .around(logStreamRule)
           .around(writerRule)
           .around(readerRule);
@@ -59,7 +62,9 @@ public class LogStreamBatchWriterTest {
 
   @Before
   public void setUp() {
-    writer = new LogStreamBatchWriterImpl(logStreamRule.getLogStream());
+    final var logStream = logStreamRule.getLogStream();
+    storageRule.setLogStream(logStream);
+    writer = new LogStreamBatchWriterImpl(logStream);
   }
 
   private List<LoggedEvent> getWrittenEvents(final long position) {

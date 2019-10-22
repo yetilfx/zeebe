@@ -15,6 +15,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import io.zeebe.logstreams.spi.LogStorage;
+import io.zeebe.logstreams.util.AtomixLogStorageRule;
 import io.zeebe.logstreams.util.LogStreamReaderRule;
 import io.zeebe.logstreams.util.LogStreamRule;
 import io.zeebe.logstreams.util.LogStreamWriterRule;
@@ -31,20 +32,23 @@ import org.junit.rules.TemporaryFolder;
 
 public class LogStreamReaderTest {
   private static final UnsafeBuffer EVENT_VALUE = new UnsafeBuffer(getBytes("test"));
-  private static final int LOG_SEGMENT_SIZE = (int) ByteValue.ofMegabytes(4).toBytes();
   private static final UnsafeBuffer BIG_EVENT_VALUE =
       new UnsafeBuffer(new byte[BufferedLogStreamReader.DEFAULT_INITIAL_BUFFER_CAPACITY * 2]);
   @Rule public ExpectedException expectedException = ExpectedException.none();
-  public TemporaryFolder temporaryFolder = new TemporaryFolder();
-  public LogStreamRule logStreamRule =
-      LogStreamRule.createStarted(
-          temporaryFolder, builder -> builder.logSegmentSize(LOG_SEGMENT_SIZE));
-  public LogStreamWriterRule writer = new LogStreamWriterRule(logStreamRule);
-  public LogStreamReaderRule readerRule = new LogStreamReaderRule(logStreamRule);
+
+  private final TemporaryFolder temporaryFolder = new TemporaryFolder();
+  private final AtomixLogStorageRule storageRule = new AtomixLogStorageRule(temporaryFolder);
+  private LogStreamRule logStreamRule = LogStreamRule.createStarted(storageRule);
+  private LogStreamWriterRule writer = new LogStreamWriterRule(logStreamRule);
+  private LogStreamReaderRule readerRule = new LogStreamReaderRule(logStreamRule);
 
   @Rule
   public RuleChain ruleChain =
-      RuleChain.outerRule(temporaryFolder).around(logStreamRule).around(readerRule).around(writer);
+      RuleChain.outerRule(temporaryFolder)
+          .around(storageRule)
+          .around(logStreamRule)
+          .around(readerRule)
+          .around(writer);
 
   private final Random random = new Random();
   private LogStreamReader reader;
@@ -52,6 +56,7 @@ public class LogStreamReaderTest {
 
   @Before
   public void setUp() {
+    storageRule.setLogStream(logStreamRule.getLogStream());
     eventKey = random.nextLong();
     reader = readerRule.getLogStreamReader();
   }
@@ -337,21 +342,6 @@ public class LogStreamReaderTest {
 
     // when
     ((BufferedLogStreamReader) reader).wrap(logStorage);
-  }
-
-  @Test
-  public void shouldSeekToEventsWhenMoreThanOneSegment() {
-    // given
-    final int numEventsToFillSegment = LOG_SEGMENT_SIZE / BIG_EVENT_VALUE.capacity();
-    final long position = writer.writeEvents(2 * numEventsToFillSegment, BIG_EVENT_VALUE);
-    writer.writeEvents(numEventsToFillSegment, BIG_EVENT_VALUE);
-
-    // when
-    reader.seek(position);
-
-    // then
-    assertThat(reader.hasNext()).isTrue();
-    assertThat(reader.next().getPosition()).isEqualTo(position);
   }
 
   @Test

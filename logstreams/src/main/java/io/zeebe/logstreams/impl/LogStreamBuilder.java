@@ -13,8 +13,6 @@ import io.zeebe.logstreams.impl.service.LogStreamService;
 import io.zeebe.logstreams.spi.LogStorage;
 import io.zeebe.util.sched.channel.ActorConditions;
 import java.util.Objects;
-import java.util.function.Function;
-import java.util.function.UnaryOperator;
 import org.agrona.concurrent.status.AtomicLongPosition;
 
 public class LogStreamBuilder {
@@ -22,9 +20,8 @@ public class LogStreamBuilder {
   private final AtomicLongPosition commitPosition = new AtomicLongPosition();
   private final ActorConditions onCommitPositionUpdatedConditions = new ActorConditions();
   private String logName;
-  private int maxFragmentSize = 1024 * 1024 * 4;
+  private int maxBlockSize = 1024 * 512;
   private LogStorage logStorage;
-  private Function<LogStorage, LogStorage> logStorageStubber = Function.identity();
 
   public LogStreamBuilder(final int partitionId) {
     this.partitionId = partitionId;
@@ -40,28 +37,19 @@ public class LogStreamBuilder {
     return this;
   }
 
-  public LogStreamBuilder logStorageStubber(final UnaryOperator<LogStorage> logStorageStubber) {
-    this.logStorageStubber = logStorageStubber;
-    return this;
-  }
-
-  public LogStreamBuilder maxFragmentSize(final int maxFragmentSize) {
-    this.maxFragmentSize = maxFragmentSize;
+  public LogStreamBuilder maxBlockSize(final int maxBlockSize) {
+    this.maxBlockSize = maxBlockSize;
     return this;
   }
 
   public LogStreamService build() {
     validate();
 
-    if (logStorageStubber != null) {
-      logStorage = logStorageStubber.apply(logStorage);
-    }
-
     return new LogStreamService(
         onCommitPositionUpdatedConditions,
         logName,
         partitionId,
-        maxFragmentSize,
+        maxBlockSize,
         commitPosition,
         logStorage);
   }
@@ -70,5 +58,9 @@ public class LogStreamBuilder {
     Objects.requireNonNull(logName, "logName");
     Objects.requireNonNull(logStorage, "logStorage");
     ensureGreaterThanOrEqual("partitionId", partitionId, 0);
+  }
+
+  public LogStorage getLogStorage() {
+    return Objects.requireNonNull(logStorage);
   }
 }

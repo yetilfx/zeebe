@@ -37,7 +37,7 @@ public class AtomixTestNode {
   private final Member member;
   private final Node node;
   private final File directory;
-  private final UnaryOperator<RaftPartitionGroup.Builder> builder;
+  private final UnaryOperator<AtomixPartitionGroup.Builder> builder;
 
   private RaftPartitionGroup dataPartitionGroup;
   private RaftPartitionGroup systemPartitionGroup;
@@ -49,7 +49,9 @@ public class AtomixTestNode {
   }
 
   public AtomixTestNode(
-      final int id, final File directory, final UnaryOperator<RaftPartitionGroup.Builder> builder) {
+      final int id,
+      final File directory,
+      final UnaryOperator<AtomixPartitionGroup.Builder> builder) {
     final var textualId = String.valueOf(id);
 
     this.directory = directory;
@@ -93,7 +95,7 @@ public class AtomixTestNode {
     dataPartitionGroup =
         builder
             .apply(
-                buildPartitionGroup(RaftPartitionGroup.builder(DATA_PARTITION_GROUP_NAME), nodes))
+                buildPartitionGroup(AtomixPartitionGroup.builder(DATA_PARTITION_GROUP_NAME), nodes))
             .build();
     partitionService =
         createPartitionService(cluster.getMembershipService(), cluster.getCommunicationService());
@@ -135,20 +137,21 @@ public class AtomixTestNode {
         .build();
   }
 
-  private RaftPartitionGroup.Builder buildPartitionGroup(
-      final RaftPartitionGroup.Builder builder, final Collection<AtomixTestNode> nodes) {
+  @SuppressWarnings("unchecked")
+  private <T extends RaftPartitionGroup.Builder> T buildPartitionGroup(
+      final T builder, final Collection<AtomixTestNode> nodes) {
     final Set<Member> members =
         nodes.stream().map(AtomixTestNode::getMember).collect(Collectors.toSet());
     members.add(member);
 
-    return builder
-        .withDataDirectory(directory)
-        .withMembers(members.toArray(new Member[0]))
-        .withNumPartitions(1)
-        .withPartitionSize(members.size())
-        .withFlushOnCommit()
-        .withStorageLevel(StorageLevel.DISK)
-        .withSegmentSize(1024L);
+    return (T)
+        builder
+            .withDataDirectory(directory)
+            .withMembers(members.toArray(new Member[0]))
+            .withNumPartitions(1)
+            .withPartitionSize(members.size())
+            .withFlushOnCommit()
+            .withStorageLevel(StorageLevel.DISK);
   }
 
   private ManagedPartitionService createPartitionService(

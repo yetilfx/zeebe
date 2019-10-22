@@ -26,47 +26,47 @@ import java.util.function.Function;
 import org.agrona.concurrent.status.AtomicLongPosition;
 
 public class AtomixLogStreamBuilder {
-  private final AtomicLongPosition commitPosition = new AtomicLongPosition();
-  private final ActorConditions onCommitPositionUpdatedConditions = new ActorConditions();
-
-  private String name;
-  private RaftPartition partition;
-  private ServiceContainer serviceContainer;
-
-  public AtomixLogStreamBuilder name(String name) {
-    this.name = name;
-    return this;
-  }
-
-  public AtomixLogStreamBuilder partition(final RaftPartition partition) {
-    this.partition = partition;
-    return this;
-  }
-
-  public AtomixLogStreamBuilder serviceContainer(final ServiceContainer serviceContainer) {
-    this.serviceContainer = serviceContainer;
-    return this;
-  }
-
-  public ActorFuture<LogStream> build() {
-    validate();
-
-    final var serviceName = logStreamServiceName(name);
-    final var logStream = new AtomixLogStream(partition);
-
-    return serviceContainer.createService(serviceName, logStream).install();
-  }
-
-  private void validate() {
-    Objects.requireNonNull(name, "name");
-    Objects.requireNonNull(partition, "partition");
-//    Objects.requireNonNull(dispatcher, "dispatcher");
+//  private final AtomicLongPosition commitPosition = new AtomicLongPosition();
+//  private final ActorConditions onCommitPositionUpdatedConditions = new ActorConditions();
 //
-//    if (logSegmentSize < maxFragmentSize) {
-//      throw new IllegalArgumentException(
-//        String.format(
-//          "Expected the log segment size greater than the max fragment size of %s, but was %s.",
-//          ByteValue.ofBytes(maxFragmentSize), ByteValue.ofBytes(logSegmentSize)));
-//    }
-  }
+//  private String name;
+//  private RaftPartition partition;
+//  private ServiceContainer serviceContainer;
+//
+//  public AtomixLogStreamBuilder name(String name) {
+//    this.name = name;
+//    return this;
+//  }
+//
+//  public AtomixLogStreamBuilder partition(final RaftPartition partition) {
+//    this.partition = partition;
+//    return this;
+//  }
+//
+//  public AtomixLogStreamBuilder serviceContainer(final ServiceContainer serviceContainer) {
+//    this.serviceContainer = serviceContainer;
+//    return this;
+//  }
+//
+//  public ActorFuture<LogStream> build() {
+//    validate();
+//
+//    final var serviceName = logStreamServiceName(name);
+//    final var logStream = new AtomixLogStream(partition);
+//
+//    return serviceContainer.createService(serviceName, logStream).install();
+//  }
+//
+//  private void validate() {
+//    Objects.requireNonNull(name, "name");
+//    Objects.requireNonNull(partition, "partition");
+////    Objects.requireNonNull(dispatcher, "dispatcher");
+////
+////    if (logSegmentSize < maxFragmentSize) {
+////      throw new IllegalArgumentException(
+////        String.format(
+////          "Expected the log segment size greater than the max fragment size of %s, but was %s.",
+////          ByteValue.ofBytes(maxFragmentSize), ByteValue.ofBytes(logSegmentSize)));
+////    }
+//  }
 }

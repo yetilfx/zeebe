@@ -9,6 +9,7 @@ package io.zeebe.servicecontainer.testing;
 
 import io.zeebe.servicecontainer.ServiceContainer;
 import io.zeebe.servicecontainer.impl.ServiceContainerImpl;
+import io.zeebe.util.LangUtil;
 import io.zeebe.util.sched.ActorScheduler;
 import io.zeebe.util.sched.testing.ActorSchedulerRule;
 import io.zeebe.util.sched.testing.ControlledActorSchedulerRule;
@@ -43,20 +44,29 @@ public class ServiceContainerRule extends ExternalResource {
   }
 
   @Override
-  protected void before() throws Throwable {
-    final ActorScheduler actorScheduler =
-        actorSchedulerRule == null ? controlledActorSchedulerRule.get() : actorSchedulerRule.get();
-    serviceContainer = new ServiceContainerImpl(actorScheduler);
-    serviceContainer.start();
+  public void before() throws Throwable {
+    if (serviceContainer == null) {
+      final ActorScheduler actorScheduler =
+          actorSchedulerRule == null
+              ? controlledActorSchedulerRule.get()
+              : actorSchedulerRule.get();
+      serviceContainer = new ServiceContainerImpl(actorScheduler);
+      serviceContainer.start();
+    }
   }
 
   @Override
-  protected void after() {
-    if (shouldStop) {
-      try {
-        serviceContainer.close(5, TimeUnit.SECONDS);
-      } catch (InterruptedException | ExecutionException | TimeoutException e) {
-        throw new RuntimeException(e);
+  public void after() {
+    if (serviceContainer != null) {
+      if (shouldStop) {
+        try {
+          serviceContainer.close(5, TimeUnit.SECONDS);
+        } catch (InterruptedException e) {
+          Thread.currentThread().interrupt();
+          LangUtil.rethrowUnchecked(e);
+        } catch (ExecutionException | TimeoutException e) {
+          LangUtil.rethrowUnchecked(e);
+        }
       }
     }
   }

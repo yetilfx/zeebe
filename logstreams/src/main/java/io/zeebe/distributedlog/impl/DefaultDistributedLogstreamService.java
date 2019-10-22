@@ -151,7 +151,7 @@ public class DefaultDistributedLogstreamService
     final File logDirectory = config.getLogDirectory();
 
     return LogStreams.createFsLogStream(partitionId)
-        .maxFragmentSize(config.getMaxFragmentSize())
+        .maxBlockSize(config.getMaxFragmentSize())
         .logName(logServiceName)
         .build();
   }

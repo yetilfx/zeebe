@@ -63,16 +63,16 @@ public class LogStreamService implements LogStream, Service<LogStream> {
   @Override
   public void start(final ServiceStartContext startContext) {
     commitPosition.setVolatile(INVALID_ADDRESS);
-
     serviceContext = startContext;
-    reader = new BufferedLogStreamReader(this);
-    setCommitPosition(reader.seekToEnd());
 
     try {
       logStorage.open();
     } catch (final IOException e) {
       throw new UncheckedIOException(e);
     }
+
+    reader = new BufferedLogStreamReader(this);
+    setCommitPosition(reader.seekToEnd());
   }
 
   @Override
@@ -103,7 +103,12 @@ public class LogStreamService implements LogStream, Service<LogStream> {
   @Override
   public ActorFuture<Void> closeAsync() {
     // this is a weird way of requesting close...
-    return serviceContext.removeService(logStreamServiceName(logName));
+    try {
+      return serviceContext.removeService(logStreamServiceName(logName));
+    } catch (IllegalStateException e) {
+      LOG.warn("Service container was already closed");
+      return CompletableActorFuture.completed(null);
+    }
   }
 
   @Override
@@ -146,7 +151,12 @@ public class LogStreamService implements LogStream, Service<LogStream> {
 
   @Override
   public Dispatcher getWriteBuffer() {
-    return getLogStorageAppender().getWriteBuffer();
+    final var appender = getLogStorageAppender();
+    if (appender != null) {
+      return appender.getWriteBuffer();
+    }
+
+    return null;
   }
 
   @Override
@@ -161,12 +171,14 @@ public class LogStreamService implements LogStream, Service<LogStream> {
   @Override
   public ActorFuture<Void> closeAppender() {
     if (appenderFuture != null) {
-      appenderFuture.cancel(true);
       appenderFuture = null;
     }
 
     if (appender != null) {
-      return appender.close();
+      // obviously not safe
+      final var closed = appender.close();
+      appender = null;
+      return closed;
     } else {
       return CompletableActorFuture.completed(null);
     }
