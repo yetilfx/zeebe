@@ -15,7 +15,7 @@ import io.zeebe.servicecontainer.Service;
 import io.zeebe.servicecontainer.ServiceStartContext;
 import io.zeebe.servicecontainer.ServiceStopContext;
 
-public class LeaderLogStreamDeletionService implements DeletionService, Service {
+public class LeaderLogStreamDeletionService implements DeletionService, Service<DeletionService> {
   private final Injector<ExporterManagerService> exporterManagerInjector = new Injector<>();
   private final LogStream logStream;
   private ExporterManagerService exporterManagerService;
@@ -30,7 +30,9 @@ public class LeaderLogStreamDeletionService implements DeletionService, Service 
   }
 
   @Override
-  public void stop(final ServiceStopContext stopContext) {}
+  public void stop(final ServiceStopContext stopContext) {
+    // nothing to do
+  }
 
   @Override
   public LeaderLogStreamDeletionService get() {

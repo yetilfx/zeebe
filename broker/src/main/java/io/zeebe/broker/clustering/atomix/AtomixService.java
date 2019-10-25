@@ -5,7 +5,10 @@
  * Licensed under the Zeebe Community License 1.0. You may not use this file
  * except in compliance with the Zeebe Community License 1.0.
  */
-package io.zeebe.broker.clustering.base.gossip;
+package io.zeebe.broker.clustering.atomix;
+
+import static io.zeebe.broker.clustering.base.ClusterBaseLayerServiceNames.POSITION_BROADCASTER_SERVICE;
+import static io.zeebe.broker.clustering.base.ClusterBaseLayerServiceNames.ATOMIX_JOIN_SERVICE;
 
 import io.atomix.cluster.Node;
 import io.atomix.cluster.discovery.BootstrapDiscoveryBuilder;
@@ -13,17 +16,15 @@ import io.atomix.cluster.discovery.BootstrapDiscoveryProvider;
 import io.atomix.cluster.discovery.NodeDiscoveryProvider;
 import io.atomix.core.Atomix;
 import io.atomix.core.AtomixBuilder;
+import io.atomix.protocols.raft.RaftStateMachineFactory;
 import io.atomix.protocols.raft.partition.RaftPartitionGroup;
 import io.atomix.protocols.raft.partition.RaftPartitionGroup.Builder;
 import io.atomix.utils.net.Address;
 import io.zeebe.broker.Loggers;
-import io.zeebe.broker.clustering.base.partitions.Partition;
-import io.zeebe.broker.logstreams.restore.BrokerRestoreFactory;
 import io.zeebe.broker.system.configuration.BrokerCfg;
 import io.zeebe.broker.system.configuration.ClusterCfg;
 import io.zeebe.broker.system.configuration.DataCfg;
 import io.zeebe.broker.system.configuration.NetworkCfg;
-import io.zeebe.distributedlog.impl.LogstreamConfig;
 import io.zeebe.servicecontainer.Service;
 import io.zeebe.servicecontainer.ServiceStartContext;
 import io.zeebe.servicecontainer.ServiceStopContext;
@@ -41,8 +42,8 @@ import org.slf4j.Logger;
 
 public class AtomixService implements Service<Atomix> {
 
+  public static final String PARTITION_GROUP_NAME = "raft-atomix";
   private static final Logger LOG = Loggers.CLUSTERING_LOGGER;
-
   private final BrokerCfg configuration;
   private Atomix atomix;
 
@@ -97,29 +98,26 @@ public class AtomixService implements Service<Atomix> {
             .withFlushOnCommit()
             .build();
 
-    final String raftPartitionGroupName = Partition.GROUP_NAME;
+    final var stateMachineFactory = new AtomixStateMachineFactory(clusterCfg.getPartitionsCount());
     final RaftPartitionGroup partitionGroup =
-        createRaftPartitionGroup(rootDirectory, raftPartitionGroupName);
+        createRaftPartitionGroup(rootDirectory, stateMachineFactory);
+    final var started =
+        startContext
+            .createService(
+              POSITION_BROADCASTER_SERVICE,
+                new AtomixPositionBroadcasterService(stateMachineFactory))
+            .dependency(ATOMIX_JOIN_SERVICE) // the broadcaster is useless before we've joined Atomix
+            .install();
 
     atomix =
         atomixBuilder.withManagementGroup(systemGroup).withPartitionGroups(partitionGroup).build();
-
-    final BrokerRestoreFactory restoreFactory =
-        new BrokerRestoreFactory(
-            atomix.getCommunicationService(),
-            atomix.getPartitionService(),
-            raftPartitionGroupName,
-            localMemberId);
-
-    LogstreamConfig.putRestoreFactory(localMemberId, restoreFactory);
+    startContext.async(started, true);
   }
 
   @Override
   public void stop(final ServiceStopContext stopContext) {
-    final String localMemberId = atomix.getMembershipService().getLocalMember().id().id();
     final CompletableFuture<Void> stopFuture = atomix.stop();
     stopContext.async(mapCompletableFuture(stopFuture));
-    LogstreamConfig.removeRestoreFactory(localMemberId);
   }
 
   @Override
@@ -128,9 +126,9 @@ public class AtomixService implements Service<Atomix> {
   }
 
   private RaftPartitionGroup createRaftPartitionGroup(
-      final String rootDirectory, final String raftPartitionGroupName) {
+      final String root, final RaftStateMachineFactory stateMachineFactory) {
 
-    final File raftDirectory = new File(rootDirectory, raftPartitionGroupName);
+    final File raftDirectory = new File(root, PARTITION_GROUP_NAME);
     if (!raftDirectory.exists()) {
       try {
         Files.createDirectory(raftDirectory.toPath());
@@ -144,7 +142,8 @@ public class AtomixService implements Service<Atomix> {
     final NetworkCfg networkCfg = configuration.getNetwork();
 
     final Builder partitionGroupBuilder =
-        RaftPartitionGroup.builder(raftPartitionGroupName)
+        AtomixPartitionGroup.builder(PARTITION_GROUP_NAME)
+            .withStateMachineFactory(stateMachineFactory)
             .withNumPartitions(clusterCfg.getPartitionsCount())
             .withPartitionSize(clusterCfg.getReplicationFactor())
             .withMembers(getRaftGroupMembers(clusterCfg))

@@ -20,13 +20,13 @@ public class EngineServiceNames {
           ServiceName.newServiceName(
               "broker.subscriptionApi.messageHandler", SubscriptionCommandMessageHandler.class);
 
-  public static final ServiceName<StateStorageFactory> stateStorageFactoryServiceName(
+  public static ServiceName<StateStorageFactory> stateStorageFactoryServiceName(
       String partitionName) {
     return ServiceName.newServiceName(
         String.format("%s.rocksdb.storage", partitionName), StateStorageFactory.class);
   }
 
-  public static final ServiceName<DeletionService> leaderLogStreamDeletionService(int partitionId) {
+  public static ServiceName<DeletionService> leaderLogStreamDeletionService(int partitionId) {
     return ServiceName.newServiceName(
         String.format("logstream.%d.deletion", partitionId), DeletionService.class);
   }

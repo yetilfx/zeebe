@@ -14,12 +14,12 @@ import static org.mockito.Mockito.anyLong;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import com.google.common.base.Stopwatch;
 import io.zeebe.logstreams.spi.LogStorage;
-import io.zeebe.logstreams.util.AtomixLogStorageRule;
+import io.zeebe.logstreams.util.AtomixStorageRule;
 import io.zeebe.logstreams.util.LogStreamReaderRule;
 import io.zeebe.logstreams.util.LogStreamRule;
 import io.zeebe.logstreams.util.LogStreamWriterRule;
-import io.zeebe.util.ByteValue;
 import java.util.NoSuchElementException;
 import java.util.Random;
 import org.agrona.concurrent.UnsafeBuffer;
@@ -37,7 +37,7 @@ public class LogStreamReaderTest {
   @Rule public ExpectedException expectedException = ExpectedException.none();
 
   private final TemporaryFolder temporaryFolder = new TemporaryFolder();
-  private final AtomixLogStorageRule storageRule = new AtomixLogStorageRule(temporaryFolder);
+  private final AtomixStorageRule storageRule = new AtomixStorageRule(temporaryFolder);
   private LogStreamRule logStreamRule = LogStreamRule.createStarted(storageRule);
   private LogStreamWriterRule writer = new LogStreamWriterRule(logStreamRule);
   private LogStreamReaderRule readerRule = new LogStreamReaderRule(logStreamRule);
@@ -56,7 +56,7 @@ public class LogStreamReaderTest {
 
   @Before
   public void setUp() {
-    storageRule.setLogStream(logStreamRule.getLogStream());
+    storageRule.setPositionListener(logStreamRule.getLogStream()::setCommitPosition);
     eventKey = random.nextLong();
     reader = readerRule.getLogStreamReader();
   }
@@ -300,10 +300,14 @@ public class LogStreamReaderTest {
     final int eventCount = 100_000;
 
     // when
+    final var writing = Stopwatch.createStarted();
     writer.writeEvents(eventCount, EVENT_VALUE);
+    System.out.println("Writing took: " + writing.stop());
 
     // then
+    final var reading = Stopwatch.createStarted();
     readerRule.assertEvents(eventCount, EVENT_VALUE);
+    System.out.println("Reading took: " + reading.stop());
     assertThat(reader.hasNext()).isFalse();
   }
 

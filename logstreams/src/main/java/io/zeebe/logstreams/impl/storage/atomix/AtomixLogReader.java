@@ -10,19 +10,22 @@ public class AtomixLogReader {
   private final AtomixReaderFactory factory;
 
   // use a fixed reader strictly for first/last index isn't create, but works for now
+  private final RaftLogReader indexReader;
   private final RaftLogReader reader;
+  private boolean closed;
 
   AtomixLogReader(final AtomixReaderFactory factory) {
     this.factory = factory;
+    this.indexReader = factory.create();
     this.reader = factory.create();
   }
 
   long getFirstIndex() {
-    return reader.getFirstIndex();
+    return indexReader.getFirstIndex();
   }
 
   long getLastIndex() {
-    return reader.getLastIndex();
+    return indexReader.getLastIndex();
   }
 
   /**
@@ -31,7 +34,7 @@ public class AtomixLogReader {
    * @param index index to seek to
    */
   Optional<Indexed<ZeebeEntry>> read(final long index) {
-    try (final var reader = factory.create(index)) {
+    try (final var reader = getReader(index)) {
       while (reader.hasNext()) {
         final var entry = reader.next();
         if (entry.type().equals(ZeebeEntry.class)) {
@@ -44,6 +47,14 @@ public class AtomixLogReader {
   }
 
   public void close() {
+    indexReader.close();
     reader.close();
+    closed = true;
+  }
+
+  private RaftLogReader getReader(final long index) {
+    // return factory.create(index);
+    reader.reset(index);
+    return reader;
   }
 }

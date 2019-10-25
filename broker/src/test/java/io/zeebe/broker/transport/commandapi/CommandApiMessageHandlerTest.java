@@ -73,9 +73,10 @@ public class CommandApiMessageHandlerTest {
     JOB_EVENT = buffer.byteArray();
   }
 
-  public TemporaryFolder tempFolder = new TemporaryFolder();
-  public ActorSchedulerRule agentRunnerService = new ActorSchedulerRule();
-  public ServiceContainerRule serviceContainerRule = new ServiceContainerRule(agentRunnerService);
+  private TemporaryFolder tempFolder = new TemporaryFolder();
+  private ActorSchedulerRule agentRunnerService = new ActorSchedulerRule();
+  private ServiceContainerRule serviceContainerRule = new ServiceContainerRule(agentRunnerService);
+  private
 
   @Rule
   public RuleChain ruleChain =
@@ -98,9 +99,7 @@ public class CommandApiMessageHandlerTest {
     serverOutput = new BufferingServerOutput();
     final String logName = "test";
     logStream =
-        LogStreams.createFsLogStream(LOG_STREAM_PARTITION_ID)
-            .logRootPath(tempFolder.getRoot().getAbsolutePath())
-            .serviceContainer(serviceContainerRule.get())
+        LogStreams.createAtomixLogStream()
             .logName(logName)
             .build()
             .join();

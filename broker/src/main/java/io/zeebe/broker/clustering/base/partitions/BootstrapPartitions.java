@@ -7,6 +7,7 @@
  */
 package io.zeebe.broker.clustering.base.partitions;
 
+import static io.zeebe.broker.clustering.base.ClusterBaseLayerServiceNames.POSITION_BROADCASTER_SERVICE;
 import static io.zeebe.broker.clustering.base.partitions.Partition.getPartitionName;
 import static io.zeebe.broker.clustering.base.partitions.PartitionServiceNames.partitionInstallServiceName;
 
@@ -35,7 +36,6 @@ public class BootstrapPartitions implements Service<Void> {
   private final Injector<Atomix> atomixInjector = new Injector<>();
   private StorageConfigurationManager configurationManager;
   private ServiceStartContext startContext;
-  private Atomix atomix;
 
   public BootstrapPartitions(final BrokerCfg brokerCfg) {
     this.brokerCfg = brokerCfg;
@@ -44,7 +44,7 @@ public class BootstrapPartitions implements Service<Void> {
   @Override
   public void start(final ServiceStartContext startContext) {
     configurationManager = configurationManagerInjector.getValue();
-    atomix = atomixInjector.getValue();
+    final Atomix atomix = atomixInjector.getValue();
 
     final RaftPartitionGroup partitionGroup =
         (RaftPartitionGroup) atomix.getPartitionService().getPartitionGroup(Partition.GROUP_NAME);
@@ -59,7 +59,7 @@ public class BootstrapPartitions implements Service<Void> {
     this.startContext = startContext;
     startContext.run(
         () -> {
-          for (RaftPartition owningPartition : owningPartitions) {
+          for (final RaftPartition owningPartition : owningPartitions) {
             installPartition(owningPartition);
           }
         });
@@ -70,7 +70,7 @@ public class BootstrapPartitions implements Service<Void> {
     return null;
   }
 
-  private void installPartition(RaftPartition partition) {
+  private void installPartition(final RaftPartition partition) {
     final StorageConfiguration configuration =
         configurationManager.createConfiguration(partition.id().id()).join();
     installPartition(startContext, configuration, partition);
@@ -79,21 +79,18 @@ public class BootstrapPartitions implements Service<Void> {
   private void installPartition(
       final ServiceStartContext startContext,
       final StorageConfiguration configuration,
-      RaftPartition partition) {
+      final RaftPartition partition) {
     final String partitionName = getPartitionName(configuration.getPartitionId());
-    final ServiceName<Void> partitionInstallServiceName =
-        partitionInstallServiceName(partitionName);
-    final String localMemberId = atomix.getMembershipService().getLocalMember().id().id();
+    final ServiceName<Void> serviceName = partitionInstallServiceName(partitionName);
 
-    final PartitionInstallService partitionInstallService =
-        new PartitionInstallService(
-            partition,
-            atomix.getEventService(),
-            atomix.getCommunicationService(),
-            configuration,
-            brokerCfg);
+    final PartitionInstallService service =
+        new PartitionInstallService(partition, configuration, brokerCfg);
 
-    startContext.createService(partitionInstallServiceName, partitionInstallService).install();
+    startContext
+        .createService(serviceName, service)
+        .dependency(atomixInjector.getInjectedServiceName(), service.getAtomixInjector())
+        .dependency(POSITION_BROADCASTER_SERVICE, service.getPositionBroadcasterInjector())
+        .install();
   }
 
   public Injector<StorageConfigurationManager> getConfigurationManagerInjector() {

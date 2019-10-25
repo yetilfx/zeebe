@@ -8,6 +8,7 @@
 package io.zeebe.broker.clustering.base;
 
 import io.atomix.core.Atomix;
+import io.zeebe.broker.clustering.atomix.AtomixPositionBroadcaster;
 import io.zeebe.broker.clustering.base.partitions.Partition;
 import io.zeebe.broker.clustering.base.partitions.PartitionLeaderElection;
 import io.zeebe.broker.clustering.base.topology.TopologyManager;
@@ -26,11 +27,11 @@ public class ClusterBaseLayerServiceNames {
       ServiceName.newServiceName("cluster.base.atomix", Atomix.class);
   public static final ServiceName<Void> ATOMIX_JOIN_SERVICE =
       ServiceName.newServiceName("cluster.base.atomix.join", Void.class);
+  public static final ServiceName<AtomixPositionBroadcaster> POSITION_BROADCASTER_SERVICE =
+      ServiceName.newServiceName(
+          "cluster.atomix.position.broadcaster", AtomixPositionBroadcaster.class);
   public static final ServiceName<PartitionLeaderElection> LEADERSHIP_SERVICE_GROUP =
       ServiceName.newServiceName("cluster.base.leadership.service", PartitionLeaderElection.class);
-
-  public static final ServiceName<Void> DISTRIBUTED_LOG_CREATE_SERVICE =
-      ServiceName.newServiceName("cluster.base.atomix.distributed.log", Void.class);
 
   public static final ServiceName<Gateway> GATEWAY_SERVICE =
       ServiceName.newServiceName("gateway", Gateway.class);
@@ -45,7 +46,7 @@ public class ClusterBaseLayerServiceNames {
   public static final ServiceName<Partition> FOLLOWER_PARTITION_GROUP_NAME =
       ServiceName.newServiceName("cluster.base.followerGroup", Partition.class);
 
-  public static ServiceName<Void> raftInstallServiceName(int partitionId) {
+  public static ServiceName<Void> raftInstallServiceName(final int partitionId) {
     return ServiceName.newServiceName(
         String.format("cluster.base.raft.install.partition-%d", partitionId), Void.class);
   }

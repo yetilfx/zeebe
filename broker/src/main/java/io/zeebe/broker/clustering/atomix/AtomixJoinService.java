@@ -5,7 +5,7 @@
  * Licensed under the Zeebe Community License 1.0. You may not use this file
  * except in compliance with the Zeebe Community License 1.0.
  */
-package io.zeebe.broker.clustering.base.gossip;
+package io.zeebe.broker.clustering.atomix;
 
 import io.atomix.core.Atomix;
 import io.zeebe.servicecontainer.Injector;
@@ -18,11 +18,10 @@ import java.util.concurrent.CompletableFuture;
 public class AtomixJoinService implements Service<Void> {
 
   private final Injector<Atomix> atomixInjector = new Injector<>();
-  private Atomix atomix;
 
   @Override
-  public void start(ServiceStartContext startContext) {
-    atomix = atomixInjector.getValue();
+  public void start(final ServiceStartContext startContext) {
+    final Atomix atomix = atomixInjector.getValue();
 
     final CompletableFuture<Void> startFuture = atomix.start();
     startContext.async(mapCompletableFuture(startFuture), true);
@@ -33,7 +32,7 @@ public class AtomixJoinService implements Service<Void> {
     return null;
   }
 
-  private ActorFuture<Void> mapCompletableFuture(CompletableFuture<Void> atomixFuture) {
+  private ActorFuture<Void> mapCompletableFuture(final CompletableFuture<Void> atomixFuture) {
     final ActorFuture<Void> mappedActorFuture = new CompletableActorFuture<>();
 
     atomixFuture

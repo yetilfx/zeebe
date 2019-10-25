@@ -1,41 +1,53 @@
 package io.zeebe.logstreams.impl.storage.atomix;
 
 import io.atomix.protocols.raft.partition.impl.RaftPartitionServer;
-import io.atomix.protocols.raft.storage.log.RaftLogReader;
 import io.atomix.protocols.raft.zeebe.ZeebeEntry;
 import io.atomix.storage.journal.Indexed;
-import io.atomix.storage.journal.JournalReader.Mode;
 import io.zeebe.logstreams.spi.LogStorage;
 import io.zeebe.logstreams.spi.ReadResultProcessor;
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.util.concurrent.CompletableFuture;
 import java.util.function.LongUnaryOperator;
 
 public class AtomixLogStorage implements LogStorage {
-  private final RaftPartitionServer partition;
+  private static final ReadResultProcessor DEFAULT_READ_PROCESSOR =
+      (buffer, readResult) -> readResult;
+
+  private final AtomixReaderFactory readerFactory;
+  private final AtomixLogCompacter logCompacter;
+  private final AtomixAppenderSupplier appenderSupplier;
 
   private AtomixLogReader reader;
 
   public AtomixLogStorage(final RaftPartitionServer partition) {
-    this.partition = partition;
+    this(partition::openReader, new Compacter(partition), partition::getAppender);
+  }
+
+  public AtomixLogStorage(
+      final AtomixReaderFactory readerFactory,
+      final AtomixLogCompacter logCompacter,
+      final AtomixAppenderSupplier appenderSupplier) {
+    this.readerFactory = readerFactory;
+    this.logCompacter = logCompacter;
+    this.appenderSupplier = appenderSupplier;
   }
 
   @Override
   public long append(final ByteBuffer blockBuffer) throws IOException {
-    final var appender = partition.getAppender().orElseThrow();
+    final var appender = appenderSupplier.getAppender().orElseThrow();
     final var data = blockBuffer.isDirect() ? copy(blockBuffer) : blockBuffer.array();
     return appender.appendEntry(data).join().index();
   }
 
   @Override
   public void delete(final long index) {
-    partition.setCompactablePosition(index, 0);
-    partition.snapshot(); // forces compaction
+    logCompacter.compact(index, 0);
   }
 
   @Override
   public long read(final ByteBuffer readBuffer, final long addr) {
-    return 0;
+    return read(readBuffer, addr, DEFAULT_READ_PROCESSOR);
   }
 
   @Override
@@ -78,7 +90,8 @@ public class AtomixLogStorage implements LogStorage {
     var low = reader.getFirstIndex();
     var high = reader.getLastIndex();
 
-    if (low == high) {
+    // when the log is empty, last index is defined as first index - 1
+    if (low >= high) {
       // need a better way to figure out how to know if its empty
       if (reader.read(low).isEmpty()) {
         return OP_RESULT_NO_DATA;
@@ -92,6 +105,7 @@ public class AtomixLogStorage implements LogStorage {
       return low;
     }
 
+    // binary search over index range, assuming we have no missing indexes
     while (low <= high) {
       final var pivotIndex = (low + high) >>> 1;
       final var pivotPosition = positionReader.applyAsLong(pivotIndex);
@@ -116,7 +130,7 @@ public class AtomixLogStorage implements LogStorage {
   @Override
   public void open() throws IOException {
     if (reader == null) {
-      reader = new AtomixLogReader(new DefaultAtomixReaderFactory(partition));
+      reader = new AtomixLogReader(readerFactory);
     }
   }
 
@@ -178,16 +192,17 @@ public class AtomixLogStorage implements LogStorage {
     return bytes;
   }
 
-  private static class DefaultAtomixReaderFactory implements AtomixReaderFactory {
+  private static final class Compacter implements AtomixLogCompacter {
     private final RaftPartitionServer partition;
 
-    public DefaultAtomixReaderFactory(final RaftPartitionServer partition) {
+    private Compacter(final RaftPartitionServer partition) {
       this.partition = partition;
     }
 
     @Override
-    public RaftLogReader create(final long index) {
-      return partition.openReader(index, Mode.COMMITS);
+    public CompletableFuture<Void> compact(final long index, final long term) {
+      partition.setCompactablePosition(index, term);
+      return partition.snapshot();
     }
   }
 }
