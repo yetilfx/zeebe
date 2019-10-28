@@ -53,8 +53,8 @@ public class LogStorageAppenderTest {
   @Before
   public void setup() {
     logStream = logStreamRule.getLogStream();
-    storageRule.setLogStream(logStream);
-    logStorageSpy = storageRule.getLogStorage();
+    storageRule.setPositionListener(logStream::setCommitPosition);
+    logStorageSpy = storageRule.getStorage();
   }
 
   @Test

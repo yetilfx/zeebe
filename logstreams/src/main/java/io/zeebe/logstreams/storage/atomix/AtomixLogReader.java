@@ -1,4 +1,4 @@
-package io.zeebe.logstreams.impl.storage.atomix;
+package io.zeebe.logstreams.storage.atomix;
 
 import io.atomix.protocols.raft.storage.log.RaftLogReader;
 import io.atomix.protocols.raft.zeebe.ZeebeEntry;
@@ -34,14 +34,13 @@ public class AtomixLogReader {
    * @param index index to seek to
    */
   Optional<Indexed<ZeebeEntry>> read(final long index) {
-    try (final var reader = getReader(index)) {
+    final var reader = getReader(index);
       while (reader.hasNext()) {
         final var entry = reader.next();
         if (entry.type().equals(ZeebeEntry.class)) {
           return Optional.of(entry.cast());
         }
       }
-    }
 
     return Optional.empty();
   }
@@ -54,6 +53,10 @@ public class AtomixLogReader {
 
   private RaftLogReader getReader(final long index) {
     // return factory.create(index);
+    if (reader.getNextIndex() == index) {
+      return reader;
+    }
+
     reader.reset(index);
     return reader;
   }

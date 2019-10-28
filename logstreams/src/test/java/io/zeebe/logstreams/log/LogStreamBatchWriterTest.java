@@ -63,7 +63,7 @@ public class LogStreamBatchWriterTest {
   @Before
   public void setUp() {
     final var logStream = logStreamRule.getLogStream();
-    storageRule.setLogStream(logStream);
+    storageRule.setPositionListener(logStream::setCommitPosition);
     writer = new LogStreamBatchWriterImpl(logStream);
   }
 

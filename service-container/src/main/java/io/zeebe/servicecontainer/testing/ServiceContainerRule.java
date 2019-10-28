@@ -44,7 +44,7 @@ public class ServiceContainerRule extends ExternalResource {
   }
 
   @Override
-  public void before() throws Throwable {
+  public void before() {
     if (serviceContainer == null) {
       final ActorScheduler actorScheduler =
           actorSchedulerRule == null

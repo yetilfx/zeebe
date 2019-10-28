@@ -35,6 +35,7 @@ public class LogStreamWriterTest {
   /** used by some test to write to the logstream in an actor thread. */
   @Rule
   public final ControlledActorSchedulerRule writerScheduler = new ControlledActorSchedulerRule();
+
   @Rule public ExpectedException expectedException = ExpectedException.none();
   private final TemporaryFolder temporaryFolder = new TemporaryFolder();
   private final AtomixLogStorageRule storageRule = new AtomixLogStorageRule(temporaryFolder);
@@ -55,8 +56,7 @@ public class LogStreamWriterTest {
   @Before
   public void setUp() {
     final var logStream = logStreamRule.getLogStream();
-
-    storageRule.setLogStream(logStream);
+    storageRule.setPositionListener(logStream::setCommitPosition);
     writer = new LogStreamWriterImpl(logStream);
   }
 

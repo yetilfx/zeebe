@@ -52,30 +52,22 @@ public final class LogStreamRule extends ExternalResource {
   }
 
   @Override
-  public void before() throws Throwable {
-    serviceContainer.getActorSchedulerRule().before();
-    serviceContainer.before();
-
+  public void before() {
     if (shouldStart) {
-      start(buildDefaultLogStream(storage.get()));
+      start();
     }
   }
 
   @Override
   protected void after() {
     stopLogStream();
-    serviceContainer.after();
-    serviceContainer.getActorSchedulerRule().after();
   }
 
   public LogStream start(final LogStreamBuilder builder) {
+    serviceContainer.getActorSchedulerRule().before();
+    serviceContainer.before();
+
     logStream = builder.build();
-    start();
-
-    return logStream;
-  }
-
-  public LogStream start() {
     getServiceContainer()
         .createService(logStreamServiceName(logStream.getLogName()), logStream)
         .install()
@@ -83,6 +75,10 @@ public final class LogStreamRule extends ExternalResource {
 
     logStream.openAppender().join();
     return logStream;
+  }
+
+  public LogStream start() {
+    return start(buildDefaultLogStream(storage.get()));
   }
 
   public void stopLogStream() {
@@ -94,6 +90,9 @@ public final class LogStreamRule extends ExternalResource {
       logStreamReader.close();
       logStreamReader = null;
     }
+
+    serviceContainer.after();
+    serviceContainer.getActorSchedulerRule().after();
   }
 
   public LogStreamReader getLogStreamReader() {
@@ -116,6 +115,6 @@ public final class LogStreamRule extends ExternalResource {
   }
 
   public static LogStreamBuilder buildDefaultLogStream(final LogStorage storage) {
-    return new LogStreamBuilder(0).logName("log-0").maxBlockSize(512 * 1024).logStorage(storage);
+    return new LogStreamBuilder(0).logName("0").maxBlockSize(512 * 1024).logStorage(storage);
   }
 }

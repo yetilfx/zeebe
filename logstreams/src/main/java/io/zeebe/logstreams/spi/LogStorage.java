@@ -9,18 +9,17 @@ package io.zeebe.logstreams.spi;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
-import java.util.function.LongUnaryOperator;
 
 /** Log structured storage abstraction */
 public interface LogStorage {
   /**
-   * Status code returned by the {@link #read(ByteBuffer, long)} operation in case the provided
+   * Status code returned by the {@link StorageReader#read(ByteBuffer, long)} operation in case the provided
    * address is invalid and does not exist.
    */
   long OP_RESULT_INVALID_ADDR = -1L;
 
   /**
-   * Status code returned by the {@link #read(ByteBuffer, long)} operation in case the provided
+   * Status code returned by the {@link StorageReader#read(ByteBuffer, long)} operation in case the provided
    * address does exist but data is not available yet. This indicates that retrying the operation
    * with the same parameters will eventually return data assuming that more data will be written to
    * the log.
@@ -28,7 +27,7 @@ public interface LogStorage {
   long OP_RESULT_NO_DATA = -2L;
 
   /**
-   * Status code returned by the {@link #read(ByteBuffer, long)} operation only if underlying
+   * Status code returned by the {@link StorageReader#read(ByteBuffer, long)} operation only if underlying
    * storage is block-addressable (in contrast to byte addressable). If the storage is block
    * addressable, consumers of this API can only read complete addressable blocks of data at a time.
    * In order to read a block, the provided read buffer must provide sufficient capacity to read at
@@ -42,6 +41,13 @@ public interface LogStorage {
    * too big to write in the storage.
    */
   long OP_RESULT_BLOCK_SIZE_TOO_BIG = -4L;
+
+  /**
+   * Creates a new reader initialized at the given address.
+   *
+   * @return a new stateful storage reader
+   */
+  StorageReader newReader();
 
   /**
    * Writes a block containing one or multiple log entries in the storage and returns the address at
@@ -69,84 +75,6 @@ public interface LogStorage {
   void delete(long address);
 
   /**
-   * Naive implementation of the {@link #read(ByteBuffer, long, ReadResultProcessor)} method. Does
-   * not process the bytes which are read.
-   *
-   * <p>Returns an operation result status code which is either
-   *
-   * <ul>
-   *   <li>positive long representing the next address at which the next block of data can be read
-   *   <li>{@link #OP_RESULT_INVALID_ADDR}: in case the provided address does not exist
-   *   <li>{@link #OP_RESULT_NO_DATA}: in case no data is (yet) available at that address
-   *   <li>{@link #OP_RESULT_INSUFFICIENT_BUFFER_CAPACITY}: in case the storage is block addressable
-   *       and the provided buffer does not have sufficient capacity to read a whole block
-   * </ul>
-   *
-   * If this method returns with a positive status code, bytes will be written between the given
-   * readbuffer's {@link ByteBuffer#position()} and {@link ByteBuffer#limit()}.
-   *
-   * <p>This method is invoked concurrently by consumer threads of the log.
-   *
-   * @param readBuffer the buffer to read into
-   * @param addr the address in the underlying storage from which bytes should be read
-   * @return the next address from which bytes can be read or error status code.
-   */
-  long read(ByteBuffer readBuffer, long addr);
-
-  /**
-   * Reads bytes into the read buffer starting at addr and process the read bytes with the help of
-   * the processor.
-   *
-   * <p>Returns an operation result status code which is either
-   *
-   * <ul>
-   *   <li>positive long representing the next address at which the next block of data can be read
-   *   <li>{@link #OP_RESULT_INVALID_ADDR}: in case the provided address does not exist
-   *   <li>{@link #OP_RESULT_NO_DATA}: in case no data is (yet) available at that address
-   *   <li>{@link #OP_RESULT_INSUFFICIENT_BUFFER_CAPACITY}: in case the storage is block addressable
-   *       and the provided buffer does not have sufficient capacity to read a whole block
-   * </ul>
-   *
-   * If this method returns with a positive status code, bytes will be written between the given
-   * readbuffer's {@link ByteBuffer#position()} and {@link ByteBuffer#limit()}.
-   *
-   * <p>This method is invoked concurrently by consumer threads of the log.
-   *
-   * @param readBuffer the buffer to read into
-   * @param addr the address in the underlying storage from which bytes should be read
-   * @param processor the processor to process the buffer and the read result
-   * @return the next address from which bytes can be read or error status code.
-   */
-  long read(ByteBuffer readBuffer, long addr, ReadResultProcessor processor);
-
-  /**
-   * Reads bytes into the given read buffer, starts with the last written blocks and iterates with
-   * help of the given processor.
-   *
-   * @param readBuffer the buffer which will contain the last block after this method returns
-   * @param processor the processor process the read bytes
-   * @return the address of the last block
-   */
-  long readLastBlock(ByteBuffer readBuffer, ReadResultProcessor processor);
-
-  /**
-   * Returns an address of the block that may contain the position. The exact address returned can
-   * be implementation-dependent. For example, a segmented storage can return the address of the
-   * first byte in the segment.
-   *
-   * @param positionReader takes an address as input and returns a position
-   * @return address in the underlying storage for which positionReader returns a value <= position
-   */
-  long lookUpApproximateAddress(long position, LongUnaryOperator positionReader);
-
-  /**
-   * @return true if the storage is byte addressable (each byte managed in the underlying storage
-   *     can be uniquely addressed using a long addr. False in case the storage is block
-   *     addressable.
-   */
-  boolean isByteAddressable();
-
-  /**
    * Open the storage. Called in the log conductor thread.
    *
    * @throws IOException on I/O errors during allocating the first segments
@@ -160,11 +88,6 @@ public interface LogStorage {
   boolean isOpen();
 
   boolean isClosed();
-
-  /**
-   * Returns the address of the first block in the storage or -1 if the storage is currently empty.
-   */
-  long getFirstBlockAddress();
 
   /**
    * Flushes all appended blocks to ensure that all blocks are written completely. Note that a

@@ -15,8 +15,9 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import com.google.common.base.Stopwatch;
+import io.zeebe.logstreams.spi.StorageReader;
 import io.zeebe.logstreams.spi.LogStorage;
-import io.zeebe.logstreams.util.AtomixStorageRule;
+import io.zeebe.logstreams.util.AtomixLogStorageRule;
 import io.zeebe.logstreams.util.LogStreamReaderRule;
 import io.zeebe.logstreams.util.LogStreamRule;
 import io.zeebe.logstreams.util.LogStreamWriterRule;
@@ -37,7 +38,7 @@ public class LogStreamReaderTest {
   @Rule public ExpectedException expectedException = ExpectedException.none();
 
   private final TemporaryFolder temporaryFolder = new TemporaryFolder();
-  private final AtomixStorageRule storageRule = new AtomixStorageRule(temporaryFolder);
+  private final AtomixLogStorageRule storageRule = new AtomixLogStorageRule(temporaryFolder);
   private LogStreamRule logStreamRule = LogStreamRule.createStarted(storageRule);
   private LogStreamWriterRule writer = new LogStreamWriterRule(logStreamRule);
   private LogStreamReaderRule readerRule = new LogStreamReaderRule(logStreamRule);
@@ -335,8 +336,10 @@ public class LogStreamReaderTest {
   public void shouldLimitAllocate() {
     // mock logStorage to always return insufficient capacity to increase buffer til max
     final LogStorage logStorage = mock(LogStorage.class);
-    when(logStorage.read(any(), anyLong(), any()))
+    final StorageReader storageReader = mock(StorageReader.class);
+    when(storageReader.read(any(), anyLong(), any()))
         .thenReturn(LogStorage.OP_RESULT_INSUFFICIENT_BUFFER_CAPACITY);
+    when(logStorage.newReader()).thenReturn(storageReader);
 
     // then
     expectedException.expect(RuntimeException.class);

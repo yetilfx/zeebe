@@ -2,7 +2,7 @@ package io.zeebe.broker.test;
 
 import static org.mockito.Mockito.spy;
 
-import io.zeebe.logstreams.impl.storage.atomix.AtomixLogStorage;
+import io.zeebe.logstreams.storage.atomix.AtomixLogStorage;
 import io.zeebe.logstreams.log.LogStream;
 import io.zeebe.logstreams.spi.LogStorage;
 import io.zeebe.test.util.atomix.AtomixTestNode;

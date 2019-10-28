@@ -1,4 +1,4 @@
-package io.zeebe.logstreams.impl.storage.atomix;
+package io.zeebe.logstreams.storage.atomix;
 
 import java.util.concurrent.CompletableFuture;
 

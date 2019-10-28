@@ -10,6 +10,7 @@ package io.zeebe.logstreams.log;
 import io.zeebe.logstreams.impl.CompleteEventsInBlockProcessor;
 import io.zeebe.logstreams.impl.LogEntryDescriptor;
 import io.zeebe.logstreams.impl.LoggedEventImpl;
+import io.zeebe.logstreams.spi.StorageReader;
 import io.zeebe.logstreams.spi.LogStorage;
 import io.zeebe.util.allocation.AllocatedBuffer;
 import io.zeebe.util.allocation.BufferAllocator;
@@ -37,7 +38,7 @@ public class BufferedLogStreamReader implements LogStreamReader {
   private final BufferAllocator bufferAllocator = new DirectBufferAllocator();
   private final DirectBuffer directBuffer = new UnsafeBuffer(0, 0);
   // wrapped logstream
-  private LogStorage logStorage;
+  private StorageReader storageReader;
   // state
   private IteratorState state;
   private long nextLogStorageReadAddress;
@@ -89,7 +90,7 @@ public class BufferedLogStreamReader implements LogStreamReader {
     }
 
     final long seekAddress =
-        logStorage.lookUpApproximateAddress(
+        storageReader.lookUpApproximateAddress(
             position,
             blockAddress -> {
               invalidateBufferAndOffsets();
@@ -112,7 +113,7 @@ public class BufferedLogStreamReader implements LogStreamReader {
     // invalidate events first as the buffer content may change
     invalidateBufferAndOffsets();
 
-    final long blockAddress = logStorage.getFirstBlockAddress();
+    final long blockAddress = storageReader.getFirstBlockAddress();
     if (blockAddress < 0) {
       // no block found => empty log
       state = IteratorState.EMPTY_LOG_STREAM;
@@ -120,18 +121,6 @@ public class BufferedLogStreamReader implements LogStreamReader {
     } else {
       readLastBlockIntoBuffer();
       return completeEventsInBlockProcessor.getLastReadEventPosition();
-    }
-  }
-
-  private boolean seekFrom(final long blockAddress, final long position) {
-    if (blockAddress < 0) {
-      // no block found => empty log
-      state = IteratorState.EMPTY_LOG_STREAM;
-      return false;
-    } else {
-      readBlockIntoBuffer(blockAddress);
-      readNextEvent();
-      return searchPositionInBuffer(position);
     }
   }
 
@@ -161,12 +150,24 @@ public class BufferedLogStreamReader implements LogStreamReader {
     return allocatedBuffer == null;
   }
 
+  private boolean seekFrom(final long blockAddress, final long position) {
+    if (blockAddress < 0) {
+      // no block found => empty log
+      state = IteratorState.EMPTY_LOG_STREAM;
+      return false;
+    } else {
+      readBlockIntoBuffer(blockAddress);
+      readNextEvent();
+      return searchPositionInBuffer(position);
+    }
+  }
+
   public void wrap(final LogStorage logStorage) {
     wrap(logStorage, FIRST_POSITION);
   }
 
   public void wrap(final LogStorage logStorage, final long position) {
-    this.logStorage = logStorage;
+    this.storageReader = logStorage.newReader();
 
     if (isClosed()) {
       allocateBuffer(DEFAULT_INITIAL_BUFFER_CAPACITY);
@@ -184,7 +185,7 @@ public class BufferedLogStreamReader implements LogStreamReader {
       directBuffer.wrap(0, 0);
       bufferOffset = 0;
 
-      logStorage = null;
+      storageReader = null;
 
       state = IteratorState.WRAP_NOT_CALLED;
     }
@@ -304,13 +305,13 @@ public class BufferedLogStreamReader implements LogStreamReader {
   private void readLastBlockIntoBuffer() {
     executeReadMethod(
         Long.MAX_VALUE,
-        readAddress -> logStorage.readLastBlock(byteBuffer, completeEventsInBlockProcessor));
+        readAddress -> storageReader.readLastBlock(byteBuffer, completeEventsInBlockProcessor));
   }
 
   private boolean readBlockIntoBuffer(final long blockAddress) {
     return executeReadMethod(
         blockAddress,
-        readAddress -> logStorage.read(byteBuffer, readAddress, completeEventsInBlockProcessor));
+        readAddress -> storageReader.read(byteBuffer, readAddress, completeEventsInBlockProcessor));
   }
 
   private boolean executeReadMethod(final long blockAddress, LongUnaryOperator readMethod) {

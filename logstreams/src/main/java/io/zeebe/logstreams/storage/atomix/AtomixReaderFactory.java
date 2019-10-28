@@ -1,4 +1,4 @@
-package io.zeebe.logstreams.impl.storage.atomix;
+package io.zeebe.logstreams.storage.atomix;
 
 import io.atomix.protocols.raft.storage.log.RaftLogReader;
 import io.atomix.storage.journal.JournalReader.Mode;

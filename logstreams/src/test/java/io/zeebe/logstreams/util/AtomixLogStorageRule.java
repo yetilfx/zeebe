@@ -1,201 +1,180 @@
 package io.zeebe.logstreams.util;
 
-import static org.mockito.Mockito.spy;
-
-import io.atomix.protocols.raft.impl.RaftContext;
-import io.atomix.protocols.raft.impl.RaftServiceManager;
+import io.atomix.protocols.raft.partition.impl.RaftNamespaces;
 import io.atomix.protocols.raft.storage.RaftStorage;
-import io.atomix.protocols.raft.storage.log.entry.RaftLogEntry;
+import io.atomix.protocols.raft.storage.log.RaftLog;
+import io.atomix.protocols.raft.storage.log.RaftLogReader;
+import io.atomix.protocols.raft.storage.snapshot.SnapshotStore;
+import io.atomix.protocols.raft.storage.system.MetaStore;
 import io.atomix.protocols.raft.zeebe.ZeebeEntry;
+import io.atomix.protocols.raft.zeebe.ZeebeLogAppender;
 import io.atomix.storage.StorageLevel;
 import io.atomix.storage.journal.Indexed;
-import io.atomix.utils.concurrent.ThreadContext;
-import io.atomix.utils.concurrent.ThreadContextFactory;
+import io.atomix.storage.journal.JournalReader.Mode;
 import io.zeebe.logstreams.impl.LoggedEventImpl;
-import io.zeebe.logstreams.impl.storage.atomix.AtomixLogStorage;
-import io.zeebe.logstreams.log.LogStream;
 import io.zeebe.logstreams.spi.LogStorage;
-import io.zeebe.test.util.atomix.AtomixTestNode;
-import java.io.File;
+import io.zeebe.logstreams.storage.atomix.AtomixAppenderSupplier;
+import io.zeebe.logstreams.storage.atomix.AtomixLogCompacter;
+import io.zeebe.logstreams.storage.atomix.AtomixLogStorage;
+import io.zeebe.logstreams.storage.atomix.AtomixReaderFactory;
 import java.io.IOException;
-import java.io.UncheckedIOException;
-import java.time.Duration;
-import java.util.Collections;
+import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
+import java.util.function.LongConsumer;
 import java.util.function.Supplier;
+import java.util.function.UnaryOperator;
 import org.agrona.concurrent.UnsafeBuffer;
 import org.junit.rules.ExternalResource;
 import org.junit.rules.TemporaryFolder;
 
-/**
- * Provides a LogStream which is backed by an AtomixLogStorage instance; in order to properly test,
- * this means a single node Raft Atomix instance is started.
- *
- * <p>This creates a single node, single partition Raft only.
- */
-public class AtomixLogStorageRule extends ExternalResource implements Supplier<LogStorage> {
+/** This thing really does everything :+1: */
+public class AtomixLogStorageRule extends ExternalResource
+    implements AtomixLogCompacter,
+        AtomixReaderFactory,
+        AtomixAppenderSupplier,
+        ZeebeLogAppender,
+        Supplier<LogStorage> {
+  private final LoggedEventImpl event = new LoggedEventImpl();
   private final TemporaryFolder temporaryFolder;
-  private final boolean shouldStart;
+  private final int partitionId;
+  private final UnaryOperator<RaftStorage.Builder> builder;
 
-  private AtomixTestNode testNode;
-  private AtomixLogStorage logStorage;
-  private LogStream logStream;
+  private RaftStorage raftStorage;
+  private RaftLog raftLog;
+  private SnapshotStore snapshotStore;
+  private MetaStore metaStore;
+
+  private AtomixLogStorage storage;
+  private LongConsumer positionListener;
 
   public AtomixLogStorageRule(final TemporaryFolder temporaryFolder) {
-    this(temporaryFolder, true);
+    this(temporaryFolder, 0);
   }
 
-  public AtomixLogStorageRule(final TemporaryFolder temporaryFolder, final boolean shouldStart) {
+  public AtomixLogStorageRule(final TemporaryFolder temporaryFolder, final int partitionId) {
+    this(temporaryFolder, partitionId, UnaryOperator.identity());
+  }
+
+  public AtomixLogStorageRule(
+      final TemporaryFolder temporaryFolder,
+      final int partitionId,
+      final UnaryOperator<RaftStorage.Builder> builder) {
     this.temporaryFolder = temporaryFolder;
-    this.shouldStart = shouldStart;
+    this.partitionId = partitionId;
+    this.builder = builder;
   }
 
   @Override
   public void before() throws Throwable {
-    if (shouldStart) {
-      start();
-    }
+    open();
   }
 
   @Override
   public void after() {
-    if (testNode != null) {
-      testNode.stop().join();
-    }
+    close();
   }
 
-  public void stop() {
-    if (logStorage != null) {
-      logStorage.close();
-      logStorage = null;
-    }
+  @Override
+  public CompletableFuture<Indexed<ZeebeEntry>> appendEntry(final byte[] data) {
+    final Indexed<ZeebeEntry> entry =
+        raftLog.writer().append(new ZeebeEntry(0, System.currentTimeMillis(), data));
+    raftLog.writer().commit(entry.index());
 
-    if (testNode != null) {
-      testNode.stop().join();
-      testNode = null;
-    }
-  }
-
-  public void start() {
-    if (testNode == null) {
-      testNode =
-          new AtomixTestNode(
-              0, newFolder(temporaryFolder), b -> b.withStateMachineFactory(StateMachine::new));
-      testNode.setMembers(Collections.singleton(testNode));
-      testNode.start().join();
+    if (positionListener != null) {
+      positionListener.accept(findGreatestPosition(entry));
     }
 
-    if (logStorage == null) {
-      logStorage = spy(new AtomixLogStorage(testNode.getPartitionServer(0)));
-    }
-  }
-
-  public LogStream getLogStream() {
-    return logStream;
-  }
-
-  public void setLogStream(final LogStream logStream) {
-    this.logStream = logStream;
-  }
-
-  public AtomixTestNode getTestNode() {
-    return testNode;
-  }
-
-  public AtomixLogStorage getLogStorage() {
-    return logStorage;
+    return CompletableFuture.completedFuture(entry);
   }
 
   @Override
   public AtomixLogStorage get() {
-    return getLogStorage();
+    return storage;
   }
 
-  private File newFolder(final TemporaryFolder provider) {
-    try {
-      return provider.newFolder("atomix");
-    } catch (final IOException e) {
-      throw new UncheckedIOException(e);
-    }
+  @Override
+  public Optional<ZeebeLogAppender> getAppender() {
+    return Optional.of(this);
   }
 
-  /**
-   * Simple controllable state machine that updates the LogStream's commit position when called to
-   * apply a new ZeebeEntry.
-   *
-   * <p>A potential optimization is to encode the first/last position as metadata in the entry.
-   */
-  class StateMachine extends RaftServiceManager {
-    private final LoggedEventImpl event = new LoggedEventImpl();
+  @Override
+  public CompletableFuture<Void> compact(final long index, final long term) {
+    raftLog.compact(index);
+    return CompletableFuture.completedFuture(null);
+  }
 
-    private volatile long compactableIndex;
-    private volatile long compactableTerm;
+  @Override
+  public RaftLogReader create(final long index, final Mode mode) {
+    return raftLog.openReader(index, mode);
+  }
 
-    StateMachine(
-        final RaftContext raft,
-        final ThreadContext stateContext,
-        final ThreadContextFactory threadContextFactory) {
-      super(raft, stateContext, threadContextFactory);
-    }
+  public void setPositionListener(final LongConsumer positionListener) {
+    this.positionListener = positionListener;
+  }
 
-    @Override
-    public void setCompactablePosition(final long index, final long term) {
-      if (term > compactableTerm) {
-        compactableIndex = index;
-        compactableTerm = term;
-      } else if (term == compactableTerm && index > compactableIndex) {
-        compactableIndex = index;
-      }
-    }
+  public void open() throws IOException {
+    open(builder);
+  }
 
-    @Override
-    public long getCompactableIndex() {
-      return compactableIndex;
-    }
+  public void open(final UnaryOperator<RaftStorage.Builder> builder) throws IOException {
+    close();
 
-    @Override
-    public long getCompactableTerm() {
-      return compactableTerm;
-    }
+    final var directory = temporaryFolder.newFolder(String.format("atomix-%d", partitionId));
+    raftStorage = builder.apply(buildDefaultStorage()).withDirectory(directory).build();
+    raftLog = raftStorage.openLog();
+    snapshotStore = raftStorage.openSnapshotStore();
+    metaStore = raftStorage.openMetaStore();
 
-    @Override
-    public <T> CompletableFuture<T> apply(final Indexed<? extends RaftLogEntry> entry) {
-      if (!entry.type().equals(ZeebeEntry.class)) {
-        return super.apply(entry);
-      }
+    storage = new AtomixLogStorage(this, this, this);
+  }
 
-      // it's possible the log stream would be null because the log storage rule has to be started
-      // before the log stream rule (so the storage is provided), but if we actually apply an entry
-      // before the log stream rule is started, then it will be null here - should be safe-ish to
-      // to wait
-      if (logStream != null) {
-        logStream.setCommitPosition(findGreatestPosition(entry.cast()));
-      }
+  public void close() {
+    Optional.ofNullable(raftLog).ifPresent(RaftLog::close);
+    Optional.ofNullable(snapshotStore).ifPresent(SnapshotStore::close);
+  }
 
-      return CompletableFuture.completedFuture(null);
-    }
+  public int getPartitionId() {
+    return partitionId;
+  }
 
-    @Override
-    protected Duration getSnapshotCompletionDelay() {
-      return Duration.ZERO;
-    }
+  public AtomixLogStorage getStorage() {
+    return storage;
+  }
 
-    @Override
-    protected Duration getCompactDelay() {
-      return Duration.ZERO;
-    }
+  public RaftStorage getRaftStorage() {
+    return raftStorage;
+  }
 
-    private long findGreatestPosition(final Indexed<ZeebeEntry> indexed) {
-      final var entry = indexed.entry();
-      final var data = new UnsafeBuffer(entry.getData());
+  public RaftLog getRaftLog() {
+    return raftLog;
+  }
 
-      var offset = 0;
-      do {
-        event.wrap(data, offset);
-        offset += event.getLength();
-      } while (offset < data.capacity());
+  public SnapshotStore getSnapshotStore() {
+    return snapshotStore;
+  }
 
-      return event.getPosition();
-    }
+  public MetaStore getMetaStore() {
+    return metaStore;
+  }
+
+  private RaftStorage.Builder buildDefaultStorage() {
+    return RaftStorage.builder()
+        .withFlushOnCommit()
+        .withStorageLevel(StorageLevel.MAPPED)
+        .withNamespace(RaftNamespaces.RAFT_STORAGE)
+        .withRetainStaleSnapshots();
+  }
+
+  private long findGreatestPosition(final Indexed<ZeebeEntry> indexed) {
+    final var entry = indexed.entry();
+    final var data = new UnsafeBuffer(entry.getData());
+
+    var offset = 0;
+    do {
+      event.wrap(data, offset);
+      offset += event.getLength();
+    } while (offset < data.capacity());
+
+    return event.getPosition();
   }
 }
