@@ -95,16 +95,21 @@ public class AtomixStorageReader implements StorageReader {
       return low;
     }
 
-    // stupid optimization
-    if (position < 0) {
-      return low;
-    }
-
     // binary search over index range, assuming we have no missing indexes
+    boolean atLeastOneZeebeEntry = false;
     while (low <= high) {
-      final var pivotIndex = (low + high) >>> 1;
-      final var pivotPosition = positionReader.applyAsLong(pivotIndex);
+      var pivotIndex = (low + high) >>> 1;
+      final var pivotEntry = findEntry(pivotIndex);
 
+      if (pivotEntry.isPresent()) {
+        pivotIndex = pivotEntry.get().index();
+        atLeastOneZeebeEntry = true;
+      } else {
+        high = pivotIndex - 1;
+        continue;
+      }
+
+      final var pivotPosition = positionReader.applyAsLong(pivotIndex);
       if (position > pivotPosition) {
         low = pivotIndex + 1;
       } else if (position < pivotPosition) {
@@ -114,7 +119,14 @@ public class AtomixStorageReader implements StorageReader {
       }
     }
 
-    return Math.max(high, reader.getFirstIndex());
+    return atLeastOneZeebeEntry
+        ? Math.max(high, reader.getFirstIndex())
+        : LogStorage.OP_RESULT_NO_DATA;
+  }
+
+  @Override
+  public void close() {
+    reader.close();
   }
 
   /**
@@ -123,6 +135,13 @@ public class AtomixStorageReader implements StorageReader {
    * @param index index to seek to
    */
   private Optional<Indexed<ZeebeEntry>> findEntry(final long index) {
+    if (reader.getCurrentIndex() == index) {
+      final var entry = reader.getCurrentEntry();
+      if (entry != null && entry.type().equals(ZeebeEntry.class)) {
+        return Optional.of(reader.getCurrentEntry().cast());
+      }
+    }
+
     if (reader.getNextIndex() != index) {
       reader.reset(index);
     }
@@ -135,11 +154,6 @@ public class AtomixStorageReader implements StorageReader {
     }
 
     return Optional.empty();
-  }
-
-  @Override
-  public void close() {
-    reader.close();
   }
 
   private long copyEntryData(
