@@ -137,6 +137,11 @@ public class AtomixStorageReader implements StorageReader {
     return Optional.empty();
   }
 
+  @Override
+  public void close() {
+    reader.close();
+  }
+
   private long copyEntryData(
       final Indexed<ZeebeEntry> entry, final ByteBuffer dest, final ReadResultProcessor processor) {
     final var data = entry.entry().getData();

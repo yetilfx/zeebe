@@ -7,10 +7,12 @@
  */
 package io.zeebe.logstreams.spi;
 
+import java.io.Closeable;
+import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.function.LongUnaryOperator;
 
-public interface StorageReader {
+public interface StorageReader extends Closeable {
   /**
    * Returns the address of the first block in the storage or {@link
    * LogStorage#OP_RESULT_INVALID_ADDR} if the storage is empty.
@@ -85,4 +87,7 @@ public interface StorageReader {
    * @return address in the underlying storage for which positionReader returns a value <= position
    */
   long lookUpApproximateAddress(long position, LongUnaryOperator positionReader);
+
+  @Override
+  void close();
 }

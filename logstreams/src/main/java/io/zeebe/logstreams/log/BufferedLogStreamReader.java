@@ -185,7 +185,10 @@ public class BufferedLogStreamReader implements LogStreamReader {
       directBuffer.wrap(0, 0);
       bufferOffset = 0;
 
-      storageReader = null;
+      if (storageReader != null) {
+        storageReader.close();
+        storageReader = null;
+      }
 
       state = IteratorState.WRAP_NOT_CALLED;
     }
