@@ -30,7 +30,7 @@ public class LogStorageAppender extends Actor implements Service<LogStorageAppen
   private final AtomicBoolean isFailed = new AtomicBoolean(false);
 
   private final BlockPeek blockPeek = new BlockPeek();
-  private final int maxFrameLength;
+  private final int maxBlockSize;
   private final LogStorage storage;
 
   private String name;
@@ -40,7 +40,7 @@ public class LogStorageAppender extends Actor implements Service<LogStorageAppen
 
   public LogStorageAppender(final LogStorage storage, final int maxBlockSize) {
     this.storage = storage;
-    this.maxFrameLength = maxBlockSize;
+    this.maxBlockSize = maxBlockSize;
   }
 
   public Dispatcher getWriteBuffer() {
@@ -113,7 +113,7 @@ public class LogStorageAppender extends Actor implements Service<LogStorageAppen
   }
 
   private void peekBlock() {
-    if (subscription.peekBlock(blockPeek, maxFrameLength, true) > 0) {
+    if (subscription.peekBlock(blockPeek, maxBlockSize, true) > 0) {
       actor.runUntilDone(this::tryWrite);
     } else {
       actor.yield();
@@ -141,14 +141,14 @@ public class LogStorageAppender extends Actor implements Service<LogStorageAppen
   private Dispatcher createWriteBuffer() {
     final var dispatcherName = String.format("logstream.%s.writeBuffer", getName());
     return Dispatchers.create(dispatcherName)
-        .maxFragmentLength(maxFrameLength)
+        .maxFragmentLength(maxBlockSize)
         .initialPartitionId(determineInitialPartitionId() + 1)
         .actorScheduler(serviceContext.getScheduler())
         .build();
   }
 
   private int determineInitialPartitionId() {
-    try (final BufferedLogStreamReader logReader = new BufferedLogStreamReader()) {
+    try (BufferedLogStreamReader logReader = new BufferedLogStreamReader()) {
       logReader.wrap(storage);
 
       // Get position of last entry

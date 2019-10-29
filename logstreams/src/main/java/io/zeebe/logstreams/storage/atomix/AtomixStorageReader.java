@@ -1,11 +1,18 @@
+/*
+ * Copyright Camunda Services GmbH and/or licensed to Camunda Services GmbH under
+ * one or more contributor license agreements. See the NOTICE file distributed
+ * with this work for additional information regarding copyright ownership.
+ * Licensed under the Zeebe Community License 1.0. You may not use this file
+ * except in compliance with the Zeebe Community License 1.0.
+ */
 package io.zeebe.logstreams.storage.atomix;
 
 import io.atomix.protocols.raft.storage.log.RaftLogReader;
 import io.atomix.protocols.raft.zeebe.ZeebeEntry;
 import io.atomix.storage.journal.Indexed;
-import io.zeebe.logstreams.spi.StorageReader;
 import io.zeebe.logstreams.spi.LogStorage;
 import io.zeebe.logstreams.spi.ReadResultProcessor;
+import io.zeebe.logstreams.spi.StorageReader;
 import java.nio.ByteBuffer;
 import java.util.Optional;
 import java.util.function.LongUnaryOperator;
@@ -41,9 +48,18 @@ public class AtomixStorageReader implements StorageReader {
       return LogStorage.OP_RESULT_NO_DATA;
     }
 
-    return findEntry(address)
-        .map(indexed -> put(indexed, readBuffer, processor))
-        .orElse(LogStorage.OP_RESULT_INVALID_ADDR);
+    final var result =
+        findEntry(address)
+            .map(indexed -> copyEntryData(indexed, readBuffer, processor))
+            .orElse(LogStorage.OP_RESULT_NO_DATA);
+
+    if (result < 0) {
+      return result;
+    } else if (result == 0) {
+      return LogStorage.OP_RESULT_NO_DATA;
+    }
+
+    return reader.getNextIndex();
   }
 
   @Override
@@ -121,12 +137,7 @@ public class AtomixStorageReader implements StorageReader {
     return Optional.empty();
   }
 
-  /**
-   * Returns the either a special purpose negative value, or the next entry index. This is obviously
-   * not a very accurate measure, as the next entry may not be a ZeebeEntry, but it should be good
-   * enough.
-   */
-  private long put(
+  private long copyEntryData(
       final Indexed<ZeebeEntry> entry, final ByteBuffer dest, final ReadResultProcessor processor) {
     final var data = entry.entry().getData();
     if (dest.remaining() < data.length) {
@@ -134,14 +145,6 @@ public class AtomixStorageReader implements StorageReader {
     }
 
     dest.put(data);
-    final var bytesRead = processor.process(dest, data.length);
-
-    if (bytesRead < 0) {
-      return bytesRead;
-    } else if (bytesRead == 0) {
-      return LogStorage.OP_RESULT_NO_DATA;
-    }
-
-    return entry.index() + 1;
+    return processor.process(dest, data.length);
   }
 }

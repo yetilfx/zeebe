@@ -107,8 +107,7 @@ public class ExporterRule implements TestRule {
         .get()
         .createService(exporterDirectorServiceName(PARTITION_ID), director)
         .dependency(LogStreamServiceNames.logStreamServiceName(STREAM_NAME))
-        .dependency(LogStreamServiceNames.logWriteBufferServiceName(STREAM_NAME))
-        .dependency(LogStreamServiceNames.logStorageServiceName(STREAM_NAME))
+        .dependency(LogStreamServiceNames.logStorageAppenderServiceName(STREAM_NAME))
         .install()
         .join();
   }

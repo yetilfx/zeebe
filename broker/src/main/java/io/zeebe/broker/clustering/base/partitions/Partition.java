@@ -94,6 +94,7 @@ public class Partition implements Service<Partition> {
           .install();
       deletionService = leaderDeletionService;
       snapshotController.setDeletionService(deletionService);
+      startContext.async(logStream.openAppender(), true);
 
       try {
         snapshotController.recover();
@@ -119,6 +120,10 @@ public class Partition implements Service<Partition> {
           "Unexpected error occurred while closing the state snapshot controller for partition {}.",
           partitionId,
           e);
+    }
+
+    if (state == RaftState.LEADER) {
+      stopContext.async(logStream.closeAppender());
     }
   }
 

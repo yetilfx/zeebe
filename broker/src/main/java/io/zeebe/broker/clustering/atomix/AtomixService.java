@@ -7,8 +7,8 @@
  */
 package io.zeebe.broker.clustering.atomix;
 
-import static io.zeebe.broker.clustering.base.ClusterBaseLayerServiceNames.POSITION_BROADCASTER_SERVICE;
 import static io.zeebe.broker.clustering.base.ClusterBaseLayerServiceNames.ATOMIX_JOIN_SERVICE;
+import static io.zeebe.broker.clustering.base.ClusterBaseLayerServiceNames.POSITION_BROADCASTER_SERVICE;
 
 import io.atomix.cluster.Node;
 import io.atomix.cluster.discovery.BootstrapDiscoveryBuilder;
@@ -101,17 +101,14 @@ public class AtomixService implements Service<Atomix> {
     final var stateMachineFactory = new AtomixStateMachineFactory(clusterCfg.getPartitionsCount());
     final RaftPartitionGroup partitionGroup =
         createRaftPartitionGroup(rootDirectory, stateMachineFactory);
-    final var started =
-        startContext
-            .createService(
-              POSITION_BROADCASTER_SERVICE,
-                new AtomixPositionBroadcasterService(stateMachineFactory))
-            .dependency(ATOMIX_JOIN_SERVICE) // the broadcaster is useless before we've joined Atomix
-            .install();
+    startContext
+        .createService(
+            POSITION_BROADCASTER_SERVICE, new AtomixPositionBroadcasterService(stateMachineFactory))
+        .dependency(ATOMIX_JOIN_SERVICE) // the broadcaster is useless before we've joined Atomix
+        .install();
 
     atomix =
         atomixBuilder.withManagementGroup(systemGroup).withPartitionGroups(partitionGroup).build();
-    startContext.async(started, true);
   }
 
   @Override

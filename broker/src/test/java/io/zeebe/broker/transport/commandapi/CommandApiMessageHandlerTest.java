@@ -7,24 +7,18 @@
  */
 package io.zeebe.broker.transport.commandapi;
 
-import static io.zeebe.logstreams.impl.service.LogStreamServiceNames.distributedLogPartitionServiceName;
+import static io.zeebe.logstreams.impl.service.LogStreamServiceNames.logStreamServiceName;
 import static io.zeebe.util.buffer.BufferUtil.wrapString;
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyLong;
-import static org.mockito.Mockito.doAnswer;
-import static org.mockito.Mockito.mock;
 
 import com.netflix.concurrency.limits.limit.SettableLimit;
+import io.zeebe.broker.test.AtomixLogStorageRule;
 import io.zeebe.broker.transport.backpressure.CommandRateLimiter;
 import io.zeebe.broker.transport.backpressure.NoopRequestLimiter;
 import io.zeebe.broker.transport.backpressure.RequestLimiter;
-import io.zeebe.distributedlog.DistributedLogstreamService;
-import io.zeebe.distributedlog.impl.DefaultDistributedLogstreamService;
-import io.zeebe.distributedlog.impl.DistributedLogstreamPartition;
-import io.zeebe.logstreams.LogStreams;
+import io.zeebe.logstreams.impl.LogStreamBuilder;
+import io.zeebe.logstreams.impl.service.LogStreamService;
 import io.zeebe.logstreams.log.BufferedLogStreamReader;
-import io.zeebe.logstreams.log.LogStream;
 import io.zeebe.logstreams.log.LoggedEvent;
 import io.zeebe.protocol.Protocol;
 import io.zeebe.protocol.impl.record.RecordMetadata;
@@ -44,7 +38,6 @@ import io.zeebe.transport.SocketAddress;
 import io.zeebe.transport.impl.RemoteAddressImpl;
 import io.zeebe.util.sched.testing.ActorSchedulerRule;
 import java.util.List;
-import java.util.concurrent.CompletableFuture;
 import org.agrona.DirectBuffer;
 import org.agrona.concurrent.UnsafeBuffer;
 import org.junit.After;
@@ -54,8 +47,6 @@ import org.junit.Test;
 import org.junit.rules.RuleChain;
 import org.junit.rules.TemporaryFolder;
 import org.mockito.MockitoAnnotations;
-import org.mockito.internal.util.reflection.FieldSetter;
-import org.mockito.stubbing.Answer;
 
 public class CommandApiMessageHandlerTest {
   protected static final RemoteAddress DEFAULT_ADDRESS =
@@ -73,23 +64,25 @@ public class CommandApiMessageHandlerTest {
     JOB_EVENT = buffer.byteArray();
   }
 
-  private TemporaryFolder tempFolder = new TemporaryFolder();
-  private ActorSchedulerRule agentRunnerService = new ActorSchedulerRule();
-  private ServiceContainerRule serviceContainerRule = new ServiceContainerRule(agentRunnerService);
-  private
-
-  @Rule
-  public RuleChain ruleChain =
-      RuleChain.outerRule(tempFolder).around(agentRunnerService).around(serviceContainerRule);
-
   protected final UnsafeBuffer buffer = new UnsafeBuffer(new byte[1024 * 1024]);
   protected final MessageHeaderEncoder headerEncoder = new MessageHeaderEncoder();
   protected final ExecuteCommandRequestEncoder commandRequestEncoder =
       new ExecuteCommandRequestEncoder();
   protected BufferingServerOutput serverOutput;
-  private LogStream logStream;
+  private TemporaryFolder tempFolder = new TemporaryFolder();
+  private ActorSchedulerRule agentRunnerService = new ActorSchedulerRule();
+  private ServiceContainerRule serviceContainerRule = new ServiceContainerRule(agentRunnerService);
+  private AtomixLogStorageRule logStorageRule = new AtomixLogStorageRule(tempFolder);
+
+  @Rule
+  public RuleChain ruleChain =
+      RuleChain.outerRule(tempFolder)
+          .around(agentRunnerService)
+          .around(serviceContainerRule)
+          .around(logStorageRule);
+
+  private LogStreamService logStream;
   private CommandApiMessageHandler messageHandler;
-  private DistributedLogstreamService distributedLogImpl;
   private RequestLimiter noneLimiter = new NoopRequestLimiter();
 
   @Before
@@ -99,52 +92,15 @@ public class CommandApiMessageHandlerTest {
     serverOutput = new BufferingServerOutput();
     final String logName = "test";
     logStream =
-        LogStreams.createAtomixLogStream()
+        new LogStreamBuilder(LOG_STREAM_PARTITION_ID)
+            .logStorage(logStorageRule.getStorage())
             .logName(logName)
-            .build()
-            .join();
-
-    // Create distributed log service
-    final DistributedLogstreamPartition mockDistLog = mock(DistributedLogstreamPartition.class);
-
-    distributedLogImpl = new DefaultDistributedLogstreamService();
+            .build();
 
     final String nodeId = "0";
-    try {
-      FieldSetter.setField(
-          distributedLogImpl,
-          DefaultDistributedLogstreamService.class.getDeclaredField("logStream"),
-          logStream);
-
-      FieldSetter.setField(
-          distributedLogImpl,
-          DefaultDistributedLogstreamService.class.getDeclaredField("currentLeader"),
-          nodeId);
-
-    } catch (NoSuchFieldException e) {
-      e.printStackTrace();
-    }
-    doAnswer(
-            (Answer<CompletableFuture<Long>>)
-                invocation -> {
-                  final Object[] arguments = invocation.getArguments();
-                  if (arguments != null
-                      && arguments.length > 1
-                      && arguments[0] != null
-                      && arguments[1] != null) {
-                    final byte[] bytes = (byte[]) arguments[0];
-                    final long pos = (long) arguments[1];
-                    return CompletableFuture.completedFuture(
-                        distributedLogImpl.append(nodeId, pos, bytes));
-                  }
-                  return null;
-                })
-        .when(mockDistLog)
-        .asyncAppend(any(byte[].class), anyLong());
-
     serviceContainerRule
         .get()
-        .createService(distributedLogPartitionServiceName(logName), () -> mockDistLog)
+        .createService(logStreamServiceName(logName), logStream)
         .install()
         .join();
 

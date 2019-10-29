@@ -52,7 +52,7 @@ public interface LogStream extends AutoCloseable {
    *
    * @param commitPosition the new commit position
    */
-  void setCommitPosition(final long commitPosition);
+  void setCommitPosition(long commitPosition);
 
   /**
    * Appends the given block of events to the logstream and updates the commit position.

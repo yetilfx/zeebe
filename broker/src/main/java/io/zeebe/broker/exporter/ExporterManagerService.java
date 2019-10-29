@@ -94,7 +94,7 @@ public class ExporterManagerService implements Service<ExporterManagerService> {
       startContext
           .createService(exporterDirectorServiceName(partition.getPartitionId()), director)
           .dependency(LogStreamServiceNames.logStreamServiceName(logName))
-          .dependency(LogStreamServiceNames.logWriteBufferServiceName(logName))
+          .dependency(LogStreamServiceNames.logStorageAppenderServiceName(logName))
           .dependency(partitionName)
           .install();
     }

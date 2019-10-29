@@ -14,13 +14,12 @@ import static io.zeebe.broker.clustering.base.ClusterBaseLayerServiceNames.FOLLO
 import static io.zeebe.broker.clustering.base.ClusterBaseLayerServiceNames.GATEWAY_SERVICE;
 import static io.zeebe.broker.clustering.base.ClusterBaseLayerServiceNames.LEADER_PARTITION_GROUP_NAME;
 import static io.zeebe.broker.clustering.base.ClusterBaseLayerServiceNames.PARTITIONS_BOOTSTRAP_SERVICE;
-import static io.zeebe.broker.clustering.base.ClusterBaseLayerServiceNames.POSITION_BROADCASTER_SERVICE;
 import static io.zeebe.broker.clustering.base.ClusterBaseLayerServiceNames.RAFT_CONFIGURATION_MANAGER;
 import static io.zeebe.broker.clustering.base.ClusterBaseLayerServiceNames.TOPOLOGY_MANAGER_SERVICE;
 
-import io.zeebe.broker.clustering.base.EmbeddedGatewayService;
 import io.zeebe.broker.clustering.atomix.AtomixJoinService;
 import io.zeebe.broker.clustering.atomix.AtomixService;
+import io.zeebe.broker.clustering.base.EmbeddedGatewayService;
 import io.zeebe.broker.clustering.base.partitions.BootstrapPartitions;
 import io.zeebe.broker.clustering.base.raft.RaftPersistentConfigurationManagerService;
 import io.zeebe.broker.clustering.base.topology.NodeInfo;
@@ -29,7 +28,6 @@ import io.zeebe.broker.system.Component;
 import io.zeebe.broker.system.SystemContext;
 import io.zeebe.broker.system.configuration.BrokerCfg;
 import io.zeebe.broker.system.configuration.NetworkCfg;
-import io.zeebe.distributedlog.impl.LogstreamConfig;
 import io.zeebe.servicecontainer.CompositeServiceBuilder;
 import io.zeebe.servicecontainer.ServiceContainer;
 

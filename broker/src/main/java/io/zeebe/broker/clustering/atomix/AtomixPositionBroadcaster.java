@@ -1,11 +1,18 @@
+/*
+ * Copyright Camunda Services GmbH and/or licensed to Camunda Services GmbH under
+ * one or more contributor license agreements. See the NOTICE file distributed
+ * with this work for additional information regarding copyright ownership.
+ * Licensed under the Zeebe Community License 1.0. You may not use this file
+ * except in compliance with the Zeebe Community License 1.0.
+ */
 package io.zeebe.broker.clustering.atomix;
 
 public interface AtomixPositionBroadcaster {
-  void setPositionListener(final String raftName, final AtomixPositionListener listener);
+  void setPositionListener(String raftName, AtomixPositionListener listener);
 
-  void removePositionListener(final String raftName);
+  void removePositionListener(String raftName);
 
   void removeAllPositionListeners();
 
-  void notifyPositionListener(final String raftName, final long position);
+  void notifyPositionListener(String raftName, long position);
 }

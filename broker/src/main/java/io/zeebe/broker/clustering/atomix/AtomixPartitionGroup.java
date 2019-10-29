@@ -1,3 +1,10 @@
+/*
+ * Copyright Camunda Services GmbH and/or licensed to Camunda Services GmbH under
+ * one or more contributor license agreements. See the NOTICE file distributed
+ * with this work for additional information regarding copyright ownership.
+ * Licensed under the Zeebe Community License 1.0. You may not use this file
+ * except in compliance with the Zeebe Community License 1.0.
+ */
 package io.zeebe.broker.clustering.atomix;
 
 import io.atomix.primitive.partition.ManagedPartitionGroup;
@@ -37,9 +44,9 @@ public class AtomixPartitionGroup extends RaftPartitionGroup {
     @Override
     public Namespace namespace() {
       return Namespace.builder()
-        .nextId(Namespaces.BEGIN_USER_CUSTOM_ID + 100)
-        .register(RaftPartitionGroup.TYPE.namespace())
-        .build();
+          .nextId(Namespaces.BEGIN_USER_CUSTOM_ID + 100)
+          .register(RaftPartitionGroup.TYPE.namespace())
+          .build();
     }
 
     @Override

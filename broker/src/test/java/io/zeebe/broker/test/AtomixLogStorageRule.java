@@ -5,10 +5,11 @@
  * Licensed under the Zeebe Community License 1.0. You may not use this file
  * except in compliance with the Zeebe Community License 1.0.
  */
-package io.zeebe.logstreams.util;
+package io.zeebe.broker.test;
 
 import io.atomix.protocols.raft.partition.impl.RaftNamespaces;
 import io.atomix.protocols.raft.storage.RaftStorage;
+import io.atomix.protocols.raft.storage.RaftStorage.Builder;
 import io.atomix.protocols.raft.storage.log.RaftLog;
 import io.atomix.protocols.raft.storage.log.RaftLogReader;
 import io.atomix.protocols.raft.storage.snapshot.SnapshotStore;
@@ -44,7 +45,7 @@ public class AtomixLogStorageRule extends ExternalResource
   private final LoggedEventImpl event = new LoggedEventImpl();
   private final TemporaryFolder temporaryFolder;
   private final int partitionId;
-  private final UnaryOperator<RaftStorage.Builder> builder;
+  private final UnaryOperator<Builder> builder;
 
   private RaftStorage raftStorage;
   private RaftLog raftLog;

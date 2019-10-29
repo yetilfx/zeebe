@@ -120,7 +120,7 @@ public class StreamProcessorBuilder {
         serviceContainer
             .createService(serviceName, streamProcessor)
             .dependency(LogStreamServiceNames.logStreamServiceName(logName))
-            .dependency(LogStreamServiceNames.logWriteBufferServiceName(logName));
+            .dependency(LogStreamServiceNames.logStorageAppenderServiceName(logName));
 
     if (additionalDependencies != null) {
       additionalDependencies.forEach((d) -> serviceBuilder.dependency(d));

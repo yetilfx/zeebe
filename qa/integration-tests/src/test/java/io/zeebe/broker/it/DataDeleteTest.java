@@ -60,12 +60,12 @@ public class DataDeleteTest {
     // given
     final String rootPath = brokerRule.getBrokerCfg().getData().getDirectories().get(0);
     final String snapshotDirPath = rootPath + "/partition-1/state/snapshots";
-    final String segmentsDirPath = rootPath + "/partition-1/segments";
+    final String segmentsDirPath = rootPath + "/raft-atomix/partitions/1";
 
     final File segmentsDir = new File(segmentsDirPath);
     int messagesSent = 0;
 
-    while (segmentsDir.list().length <= 2) {
+    while (segmentsDir.listFiles(f -> f.getName().endsWith("log")).length <= 2) {
       clientRule
           .getClient()
           .newPublishMessageCommand()

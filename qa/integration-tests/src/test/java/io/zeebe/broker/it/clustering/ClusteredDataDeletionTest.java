@@ -81,7 +81,7 @@ public class ClusteredDataDeletionTest {
     final int leaderNodeId = clusteringRule.getLeaderForPartition(1).getNodeId();
     final Broker leader = clusteringRule.getBroker(leaderNodeId);
 
-    while (getSegmentsDirectory(leader).listFiles().length <= 2) {
+    while (getSegmentsCount(leader) <= 2) {
       clusteringRule
           .getClient()
           .newPublishMessageCommand()
@@ -97,7 +97,7 @@ public class ClusteredDataDeletionTest {
 
     // then
     TestUtil.waitUntil(
-        () -> getSegmentsDirectory(leader).listFiles().length < segmentCount.get(leaderNodeId));
+        () -> getSegmentsCount(leader) < segmentCount.get(leaderNodeId));
   }
 
   @Test
@@ -110,8 +110,8 @@ public class ClusteredDataDeletionTest {
             .collect(Collectors.toList());
 
     while (followers.stream()
-        .map(this::getSegmentsDirectory)
-        .allMatch(dir -> dir.listFiles().length <= 2)) {
+        .map(this::getSegmentsCount)
+        .allMatch(count -> count <= 2)) {
       clusteringRule
           .getClient()
           .newPublishMessageCommand()
@@ -131,7 +131,7 @@ public class ClusteredDataDeletionTest {
             followers.stream()
                 .allMatch(
                     b ->
-                        getSegmentsDirectory(b).listFiles().length
+                      getSegmentsCount(b)
                             < followerSegmentCounts.get(b.getConfig().getCluster().getNodeId())));
   }
 
@@ -141,7 +141,7 @@ public class ClusteredDataDeletionTest {
     brokers.forEach(
         b -> {
           final int nodeId = b.getConfig().getCluster().getNodeId();
-          segmentCounts.put(nodeId, getSegmentsDirectory(b).list().length);
+          segmentCounts.put(nodeId, getSegmentsCount(b));
         });
 
     clusteringRule.getClock().addTime(Duration.ofSeconds(DataDeleteTest.SNAPSHOT_PERIOD_SECONDS));
@@ -152,6 +152,12 @@ public class ClusteredDataDeletionTest {
   private File getSnapshotsDirectory(Broker broker) {
     final String dataDir = broker.getConfig().getData().getDirectories().get(0);
     return new File(dataDir, "partition-1/state/snapshots");
+  }
+
+  private int getSegmentsCount(Broker broker) {
+    final var dataDir = broker.getConfig().getData().getDirectories().get(0);
+    final var directory = new File(dataDir, "/raft-atomix/partitions/1");
+    return directory.listFiles(f -> f.getName().endsWith("log")).length;
   }
 
   private File getSegmentsDirectory(Broker broker) {

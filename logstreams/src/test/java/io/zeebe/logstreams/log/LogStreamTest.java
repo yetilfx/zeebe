@@ -26,7 +26,8 @@ public class LogStreamTest {
 
   private final TemporaryFolder temporaryFolder = new TemporaryFolder();
 
-  private final AtomixLogStorageRule storageRule = new AtomixLogStorageRule(temporaryFolder, PARTITION_ID);
+  private final AtomixLogStorageRule storageRule =
+      new AtomixLogStorageRule(temporaryFolder, PARTITION_ID);
   private final LogStreamRule logStreamRule = LogStreamRule.createStarted(storageRule);
 
   @Rule

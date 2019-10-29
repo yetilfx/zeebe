@@ -32,21 +32,17 @@ import org.junit.rules.ExpectedException;
  *
  * @author Christopher Zell <christopher.zell@camunda.com>
  */
-
 public class CompleteInBlockProcessorTest {
   protected static final int LENGTH = headerLength(0); // 44 -> 52
   protected static final int ALIGNED_LEN = alignedFramedLength(LENGTH); // 56 -> 64
   private static final int SEGMENT_SIZE = 1024 * 16;
+  private static final ByteBuffer SOURCE_BUFFER = ByteBuffer.allocate(SEGMENT_SIZE);
+  private static int sourceBufferLength;
 
   @Rule public final ExpectedException thrown = ExpectedException.none();
   private final CompleteEventsInBlockProcessor processor = new CompleteEventsInBlockProcessor();
 
-  private static final ByteBuffer SOURCE_BUFFER = ByteBuffer.allocate(SEGMENT_SIZE);
-  private static int sourceBufferLength;
-
-  /**
-   * Prepares some data to read from
-   */
+  /** Prepares some data to read from */
   @BeforeClass
   public static void setUp() {
     final MutableDirectBuffer directBuffer = new UnsafeBuffer(0, 0);

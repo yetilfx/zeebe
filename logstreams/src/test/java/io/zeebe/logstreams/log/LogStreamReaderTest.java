@@ -14,9 +14,8 @@ import static org.mockito.Mockito.anyLong;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
-import com.google.common.base.Stopwatch;
-import io.zeebe.logstreams.spi.StorageReader;
 import io.zeebe.logstreams.spi.LogStorage;
+import io.zeebe.logstreams.spi.StorageReader;
 import io.zeebe.logstreams.util.AtomixLogStorageRule;
 import io.zeebe.logstreams.util.LogStreamReaderRule;
 import io.zeebe.logstreams.util.LogStreamRule;
@@ -301,14 +300,10 @@ public class LogStreamReaderTest {
     final int eventCount = 100_000;
 
     // when
-    final var writing = Stopwatch.createStarted();
     writer.writeEvents(eventCount, EVENT_VALUE);
-    System.out.println("Writing took: " + writing.stop());
 
     // then
-    final var reading = Stopwatch.createStarted();
     readerRule.assertEvents(eventCount, EVENT_VALUE);
-    System.out.println("Reading took: " + reading.stop());
     assertThat(reader.hasNext()).isFalse();
   }
 

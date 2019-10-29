@@ -13,7 +13,6 @@ import static io.zeebe.broker.clustering.base.ClusterBaseLayerServiceNames.LEADE
 import static io.zeebe.broker.clustering.base.ClusterBaseLayerServiceNames.LEADER_PARTITION_GROUP_NAME;
 import static io.zeebe.broker.clustering.base.ClusterBaseLayerServiceNames.raftInstallServiceName;
 import static io.zeebe.broker.clustering.base.partitions.PartitionServiceNames.followerPartitionServiceName;
-import static io.zeebe.broker.clustering.base.partitions.PartitionServiceNames.leaderOpenLogStreamServiceName;
 import static io.zeebe.broker.clustering.base.partitions.PartitionServiceNames.leaderPartitionServiceName;
 import static io.zeebe.broker.clustering.base.partitions.PartitionServiceNames.partitionLeaderElectionServiceName;
 
@@ -24,7 +23,6 @@ import io.zeebe.broker.clustering.atomix.AtomixPositionBroadcaster;
 import io.zeebe.broker.system.configuration.BrokerCfg;
 import io.zeebe.distributedlog.StorageConfiguration;
 import io.zeebe.logstreams.LogStreams;
-import io.zeebe.logstreams.impl.service.LeaderOpenLogStreamAppenderService;
 import io.zeebe.logstreams.impl.service.LogStreamServiceNames;
 import io.zeebe.logstreams.log.LogStream;
 import io.zeebe.servicecontainer.CompositeServiceBuilder;
@@ -228,12 +226,11 @@ public class PartitionInstallService extends Actor
         .group(LEADER_PARTITION_GROUP_NAME)
         .install();
 
-    final var openAppenderService = new LeaderOpenLogStreamAppenderService();
-    composite
-        .createService(leaderOpenLogStreamServiceName(logName), openAppenderService)
-        .dependency(logStreamServiceName, openAppenderService.getLogStreamInjector())
-        .dependency(leaderPartitionServiceName)
-        .install();
+    //    final var openAppenderService = new LeaderOpenLogStreamAppenderService();
+    //    composite
+    //        .createService(leaderOpenLogStreamServiceName(logName), openAppenderService)
+    //        .dependency(logStreamServiceName, openAppenderService.getLogStreamInjector())
+    //        .install();
 
     return composite.install();
   }

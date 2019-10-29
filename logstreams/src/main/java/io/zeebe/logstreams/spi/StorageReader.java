@@ -1,3 +1,10 @@
+/*
+ * Copyright Camunda Services GmbH and/or licensed to Camunda Services GmbH under
+ * one or more contributor license agreements. See the NOTICE file distributed
+ * with this work for additional information regarding copyright ownership.
+ * Licensed under the Zeebe Community License 1.0. You may not use this file
+ * except in compliance with the Zeebe Community License 1.0.
+ */
 package io.zeebe.logstreams.spi;
 
 import java.nio.ByteBuffer;
@@ -28,8 +35,6 @@ public interface StorageReader {
    * If this method returns with a positive status code, bytes will be written between the given
    * readbuffer's {@link ByteBuffer#position()} and {@link ByteBuffer#limit()}.
    *
-   * <p>This method is invoked concurrently by consumer threads of the log.
-   *
    * @param readBuffer the buffer to read into
    * @param address the address in the underlying storage from which bytes should be read
    * @return the next address from which bytes can be read or error status code.
@@ -53,8 +58,6 @@ public interface StorageReader {
    *
    * If this method returns with a positive status code, bytes will be written between the given
    * readbuffer's {@link ByteBuffer#position()} and {@link ByteBuffer#limit()}.
-   *
-   * <p>This method is invoked concurrently by consumer threads of the log.
    *
    * @param readBuffer the buffer to read into
    * @param address the address in the underlying storage from which bytes should be read
