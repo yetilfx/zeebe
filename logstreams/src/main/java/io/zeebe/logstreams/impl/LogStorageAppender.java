@@ -10,6 +10,8 @@ package io.zeebe.logstreams.impl;
 import io.zeebe.dispatcher.BlockPeek;
 import io.zeebe.dispatcher.Subscription;
 import io.zeebe.distributedlog.impl.DistributedLogstreamPartition;
+import io.zeebe.util.ByteUnit;
+import io.zeebe.util.Environment;
 import io.zeebe.util.sched.Actor;
 import io.zeebe.util.sched.future.ActorFuture;
 import java.nio.ByteBuffer;
@@ -29,15 +31,25 @@ public class LogStorageAppender extends Actor {
   private final Subscription writeBufferSubscription;
   private final int maxAppendBlockSize;
   private final DistributedLogstreamPartition distributedLog;
+  private final long maxBytesInflight;
+
   private byte[] bytesToAppend;
   private long commitPosition;
   private final Runnable peekedBlockHandler = this::appendBlock;
+  private long currentInFlightBytes;
 
   public LogStorageAppender(
       String name,
       DistributedLogstreamPartition distributedLog,
       Subscription writeBufferSubscription,
       int maxBlockSize) {
+
+    maxBytesInflight =
+        new Environment()
+            .getLong("ZEEBE_MAX_BYTES_INFLIGHT")
+            .orElse(ByteUnit.KILOBYTES.toBytes(32));
+
+    LOG.info("Uses maxBytesInflight {} for backpressure.", maxBytesInflight);
     this.name = name;
     this.distributedLog = distributedLog;
     this.writeBufferSubscription = writeBufferSubscription;
@@ -66,28 +78,37 @@ public class LogStorageAppender extends Actor {
   private void appendBlock() {
     final ByteBuffer rawBuffer = blockPeek.getRawBuffer();
 
-    bytesToAppend = new byte[rawBuffer.remaining()];
-    rawBuffer.get(bytesToAppend);
+    final int bytes = rawBuffer.remaining();
+    if (currentInFlightBytes + bytes < maxBytesInflight) {
+      currentInFlightBytes += bytes;
+      this.bytesToAppend = new byte[bytes];
+      rawBuffer.get(this.bytesToAppend);
 
-    // Commit position is the position of the last event. DistributedLogstream uses this position
-    // to identify duplicate append requests during recovery.
-    commitPosition = getLastEventPosition(bytesToAppend);
-    actor.runUntilDone(this::tryWrite);
-  }
-
-  private void tryWrite() {
-    distributedLog.asyncAppend(bytesToAppend, commitPosition);
-    blockPeek.markCompleted();
-    actor.done();
-    /*// TODO: Handle error codes
-    if (res >= 0) {
-      blockPeek.markCompleted();
-      actor.done();
+      // Commit position is the position of the last event. DistributedLogstream uses this position
+      // to identify duplicate append requests during recovery.
+      commitPosition = getLastEventPosition(this.bytesToAppend);
+      actor.runUntilDone(
+          () -> {
+            distributedLog
+                .asyncAppend(bytesToAppend, commitPosition)
+                .thenAccept(
+                    pos ->
+                        actor.call(
+                            () -> {
+                              currentInFlightBytes -= bytes;
+                              actor.run(this::peekBlock);
+                            }));
+            blockPeek.markCompleted();
+            actor.done();
+          });
     } else {
-      // retry
-      LOG.debug("Append failed, retrying");
+      LOG.info(
+          "With current inflight {} and next bytes {} we reach max bytes in flight ({}). Backpressure this now ...",
+          currentInFlightBytes,
+          bytes,
+          maxBytesInflight);
       actor.yield();
-    }*/
+    }
   }
 
   /* Iterate over the events in buffer and find the position of the last event */
