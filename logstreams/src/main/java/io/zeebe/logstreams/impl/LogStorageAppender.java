@@ -110,7 +110,7 @@ public class LogStorageAppender extends Actor {
                     pos ->
                         actor.call(
                             () -> {
-                              appendEntryLimiter.onCommit(pos);
+                              appendEntryLimiter.onCommit(lastEventPosition);
                               currentInFlightBytes -= bytes;
                               actor.run(this::peekBlock);
                             }));
