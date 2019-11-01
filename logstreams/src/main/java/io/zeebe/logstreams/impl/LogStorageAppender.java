@@ -40,6 +40,7 @@ public class LogStorageAppender extends Actor {
   private final Runnable peekedBlockHandler = this::appendBlock;
   private long currentInFlightBytes;
   private final AppendEntryLimiter appendEntryLimiter;
+  private final AppendBackpressureMetrics appendBackpressureMetrics;
 
   public LogStorageAppender(
       String name,
@@ -57,10 +58,13 @@ public class LogStorageAppender extends Actor {
     this.distributedLog = distributedLog;
     this.writeBufferSubscription = writeBufferSubscription;
     this.maxAppendBlockSize = maxBlockSize;
+
+    final int partitionId = distributedLog.getPartitionId();
+    appendBackpressureMetrics = new AppendBackpressureMetrics(partitionId);
     appendEntryLimiter =
         AppendEntryLimiter.builder()
             .limit(WindowedLimit.newBuilder().build(VegasLimit.newDefault()))
-            .partitionId(distributedLog.getPartitionId())
+            .partitionId(partitionId)
             .build();
   }
 
@@ -94,6 +98,7 @@ public class LogStorageAppender extends Actor {
     final long lastEventPosition = getLastEventPosition(this.bytesToAppend);
     commitPosition = lastEventPosition;
 
+    appendBackpressureMetrics.newEntryToAppend();
     if (appendEntryLimiter.tryAcquire(lastEventPosition)) {
       currentInFlightBytes += bytes;
 
@@ -113,8 +118,9 @@ public class LogStorageAppender extends Actor {
             actor.done();
           });
     } else {
+      appendBackpressureMetrics.deferred();
       LOG.info(
-          "Backpressure happens: inflight {} in bytes {} limit {}",
+          "Backpressure happens: inflight {} (in bytes {}) limit {}",
           appendEntryLimiter.getInflight(),
           currentInFlightBytes,
           appendEntryLimiter.getLimit());
