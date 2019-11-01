@@ -108,6 +108,10 @@ public class LogStorageAppender extends Actor {
     return Gradient2Limit.newBuilder()
         .initialLimit(environment.getInt("ZEEBE_INITIAL_APPEND_LIMIT").orElse(1024))
         .maxConcurrency(environment.getInt("ZEEBE_MAX_APPEND_CONCURRENCY").orElse(1024 * 32))
+        .queueSize(environment.getInt("ZEEBE_APPEND_QUEUE_SIZE").orElse(32))
+        .minLimit(environment.getInt("ZEEBE_MIN_APPEND_LIMIT").orElse(256))
+        .longWindow(environment.getInt("ZEEBE_APPEND_LONG_WINDOW").orElse(1200))
+        //        .rttTolerance(environment.getDouble("ZEEBE_APPEND_RTT_TOLERANCE").orElse(1.5f))
         .build();
   }
 
