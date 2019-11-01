@@ -73,47 +73,45 @@ public class LogStorageAppender extends Actor {
             .build();
   }
 
-  private AbstractLimit buildLimit()
-  {
+  private AbstractLimit buildLimit() {
     final String algorithm = environment.get("ZEEBE_APPEND_LIMITER").orElse("vegas");
 
-
-    final Map<String, Supplier<AbstractLimit> algorithms =
-      Map.of("vegas", this::buildVegasLimit,
-        "gradient", this::buildGradientLimit,
-        "gradient2", this::buildGradient2Limit);
+    final Map<String, Supplier<AbstractLimit>> algorithms =
+        Map.of(
+            "vegas",
+            this::buildVegasLimit,
+            "gradient",
+            this::buildGradientLimit,
+            "gradient2",
+            this::buildGradient2Limit);
 
     Supplier<AbstractLimit> abstractLimitSupplier = algorithms.get(algorithm.toLowerCase());
-    if (abstractLimitSupplier == null)
-    {
+    if (abstractLimitSupplier == null) {
       abstractLimitSupplier = this::buildVegasLimit;
     }
 
     return abstractLimitSupplier.get();
   }
 
-  private AbstractLimit buildVegasLimit()
-  {
+  private AbstractLimit buildVegasLimit() {
     return VegasLimit.newBuilder()
-      .initialLimit(environment.getInt("ZEEBE_INITIAL_APPEND_LIMIT").orElse(1024))
-      .maxConcurrency(environment.getInt("ZEEBE_MAX_APPEND_CONCURRENCY").orElse(1024 * 32))
-      .build();
+        .initialLimit(environment.getInt("ZEEBE_INITIAL_APPEND_LIMIT").orElse(1024))
+        .maxConcurrency(environment.getInt("ZEEBE_MAX_APPEND_CONCURRENCY").orElse(1024 * 32))
+        .build();
   }
 
-  private AbstractLimit buildGradientLimit()
-  {
+  private AbstractLimit buildGradientLimit() {
     return GradientLimit.newBuilder()
-      .initialLimit(environment.getInt("ZEEBE_INITIAL_APPEND_LIMIT").orElse(1024))
-      .maxConcurrency(environment.getInt("ZEEBE_MAX_APPEND_CONCURRENCY").orElse(1024 * 32))
-      .build();
+        .initialLimit(environment.getInt("ZEEBE_INITIAL_APPEND_LIMIT").orElse(1024))
+        .maxConcurrency(environment.getInt("ZEEBE_MAX_APPEND_CONCURRENCY").orElse(1024 * 32))
+        .build();
   }
 
-  private AbstractLimit buildGradient2Limit()
-  {
+  private AbstractLimit buildGradient2Limit() {
     return Gradient2Limit.newBuilder()
-      .initialLimit(environment.getInt("ZEEBE_INITIAL_APPEND_LIMIT").orElse(1024))
-      .maxConcurrency(environment.getInt("ZEEBE_MAX_APPEND_CONCURRENCY").orElse(1024 * 32))
-      .build();
+        .initialLimit(environment.getInt("ZEEBE_INITIAL_APPEND_LIMIT").orElse(1024))
+        .maxConcurrency(environment.getInt("ZEEBE_MAX_APPEND_CONCURRENCY").orElse(1024 * 32))
+        .build();
   }
 
   @Override
