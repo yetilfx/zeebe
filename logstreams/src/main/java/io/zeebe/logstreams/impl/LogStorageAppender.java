@@ -66,9 +66,12 @@ public class LogStorageAppender extends Actor {
 
     final int partitionId = distributedLog.getPartitionId();
     appendBackpressureMetrics = new AppendBackpressureMetrics(partitionId);
+
+    final Boolean windowedLimiter =
+        environment.getBool("ZEEBE_WINDOWED_APPEND_LIMITER").orElse(true);
     appendEntryLimiter =
         AppendEntryLimiter.builder()
-            .limit(WindowedLimit.newBuilder().build(buildLimit()))
+            .limit(windowedLimiter ? WindowedLimit.newBuilder().build(buildLimit()) : buildLimit())
             .partitionId(partitionId)
             .build();
   }
