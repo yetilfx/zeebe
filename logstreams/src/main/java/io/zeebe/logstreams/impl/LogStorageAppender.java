@@ -7,6 +7,8 @@
  */
 package io.zeebe.logstreams.impl;
 
+import com.netflix.concurrency.limits.limit.VegasLimit;
+import com.netflix.concurrency.limits.limit.WindowedLimit;
 import io.zeebe.dispatcher.BlockPeek;
 import io.zeebe.dispatcher.Subscription;
 import io.zeebe.distributedlog.impl.DistributedLogstreamPartition;
@@ -37,6 +39,7 @@ public class LogStorageAppender extends Actor {
   private long commitPosition;
   private final Runnable peekedBlockHandler = this::appendBlock;
   private long currentInFlightBytes;
+  private final AppendEntryLimiter appendEntryLimiter;
 
   public LogStorageAppender(
       String name,
@@ -54,6 +57,11 @@ public class LogStorageAppender extends Actor {
     this.distributedLog = distributedLog;
     this.writeBufferSubscription = writeBufferSubscription;
     this.maxAppendBlockSize = maxBlockSize;
+    appendEntryLimiter =
+        AppendEntryLimiter.builder()
+            .limit(WindowedLimit.newBuilder().build(VegasLimit.newDefault()))
+            .partitionId(distributedLog.getPartitionId())
+            .build();
   }
 
   @Override
@@ -77,16 +85,18 @@ public class LogStorageAppender extends Actor {
 
   private void appendBlock() {
     final ByteBuffer rawBuffer = blockPeek.getRawBuffer();
-
     final int bytes = rawBuffer.remaining();
-    if (currentInFlightBytes + bytes < maxBytesInflight) {
-      currentInFlightBytes += bytes;
-      this.bytesToAppend = new byte[bytes];
-      rawBuffer.get(this.bytesToAppend);
+    this.bytesToAppend = new byte[bytes];
+    rawBuffer.get(this.bytesToAppend);
 
-      // Commit position is the position of the last event. DistributedLogstream uses this position
-      // to identify duplicate append requests during recovery.
-      commitPosition = getLastEventPosition(this.bytesToAppend);
+    // Commit position is the position of the last event. DistributedLogstream uses this position
+    // to identify duplicate append requests during recovery.
+    final long lastEventPosition = getLastEventPosition(this.bytesToAppend);
+    commitPosition = lastEventPosition;
+
+    if (appendEntryLimiter.tryAcquire(lastEventPosition)) {
+      currentInFlightBytes += bytes;
+
       actor.runUntilDone(
           () -> {
             distributedLog
@@ -95,6 +105,7 @@ public class LogStorageAppender extends Actor {
                     pos ->
                         actor.call(
                             () -> {
+                              appendEntryLimiter.onCommit(pos);
                               currentInFlightBytes -= bytes;
                               actor.run(this::peekBlock);
                             }));
@@ -103,10 +114,10 @@ public class LogStorageAppender extends Actor {
           });
     } else {
       LOG.info(
-          "With current inflight {} and next bytes {} we reach max bytes in flight ({}). Backpressure this now ...",
+          "Backpressure happens: inflight {} in bytes {} limit {}",
+          appendEntryLimiter.getInflight(),
           currentInFlightBytes,
-          bytes,
-          maxBytesInflight);
+          appendEntryLimiter.getLimit());
       actor.yield();
     }
   }
