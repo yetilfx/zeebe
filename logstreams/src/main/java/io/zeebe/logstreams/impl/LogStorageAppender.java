@@ -15,7 +15,6 @@ import com.netflix.concurrency.limits.limit.WindowedLimit;
 import io.zeebe.dispatcher.BlockPeek;
 import io.zeebe.dispatcher.Subscription;
 import io.zeebe.distributedlog.impl.DistributedLogstreamPartition;
-import io.zeebe.util.ByteUnit;
 import io.zeebe.util.Environment;
 import io.zeebe.util.sched.Actor;
 import io.zeebe.util.sched.future.ActorFuture;
@@ -38,9 +37,7 @@ public class LogStorageAppender extends Actor {
   private final Subscription writeBufferSubscription;
   private final int maxAppendBlockSize;
   private final DistributedLogstreamPartition distributedLog;
-  private final long maxBytesInflight;
 
-  private byte[] bytesToAppend;
   private long commitPosition;
   private final Runnable peekedBlockHandler = this::appendBlock;
   private long currentInFlightBytes;
@@ -55,10 +52,7 @@ public class LogStorageAppender extends Actor {
       int maxBlockSize) {
 
     environment = new Environment();
-    maxBytesInflight =
-        environment.getLong("ZEEBE_MAX_BYTES_INFLIGHT").orElse(ByteUnit.KILOBYTES.toBytes(32));
 
-    LOG.info("Uses maxBytesInflight {} for backpressure.", maxBytesInflight);
     this.name = name;
     this.distributedLog = distributedLog;
     this.writeBufferSubscription = writeBufferSubscription;
@@ -139,42 +133,52 @@ public class LogStorageAppender extends Actor {
   private void appendBlock() {
     final ByteBuffer rawBuffer = blockPeek.getRawBuffer();
     final int bytes = rawBuffer.remaining();
-    this.bytesToAppend = new byte[bytes];
-    rawBuffer.get(this.bytesToAppend);
+    final var bytesToAppend = new byte[bytes];
+    rawBuffer.get(bytesToAppend);
 
     // Commit position is the position of the last event. DistributedLogstream uses this position
     // to identify duplicate append requests during recovery.
-    final long lastEventPosition = getLastEventPosition(this.bytesToAppend);
+    final long lastEventPosition = getLastEventPosition(bytesToAppend);
     commitPosition = lastEventPosition;
 
     appendBackpressureMetrics.newEntryToAppend();
     if (appendEntryLimiter.tryAcquire(lastEventPosition)) {
       currentInFlightBytes += bytes;
-
-      actor.runUntilDone(
-          () -> {
-            distributedLog
-                .asyncAppend(bytesToAppend, commitPosition)
-                .thenAccept(
-                    pos ->
-                        actor.call(
-                            () -> {
-                              appendEntryLimiter.onCommit(lastEventPosition);
-                              currentInFlightBytes -= bytes;
-                              actor.run(this::peekBlock);
-                            }));
-            blockPeek.markCompleted();
-            actor.done();
-          });
+      appendToPrimitive(bytesToAppend, lastEventPosition);
+      blockPeek.markCompleted();
     } else {
       appendBackpressureMetrics.deferred();
-      LOG.info(
+      LOG.trace(
           "Backpressure happens: inflight {} (in bytes {}) limit {}",
           appendEntryLimiter.getInflight(),
           currentInFlightBytes,
           appendEntryLimiter.getLimit());
       actor.yield();
     }
+  }
+
+  private void appendToPrimitive(byte[] bytesToAppend, long lastEventPosition) {
+    actor.submit(
+        () -> {
+          distributedLog
+              .asyncAppend(bytesToAppend, lastEventPosition)
+              .whenComplete(
+                  (appendPosition, error) -> {
+                    if (error != null) {
+                      LOG.error(
+                          "Failed to append block with last event position {}, retry.",
+                          lastEventPosition);
+                      appendToPrimitive(bytesToAppend, lastEventPosition);
+                    } else {
+                      actor.call(
+                          () -> {
+                            appendEntryLimiter.onCommit(lastEventPosition);
+                            currentInFlightBytes -= bytesToAppend.length;
+                            actor.run(this::peekBlock);
+                          });
+                    }
+                  });
+        });
   }
 
   /* Iterate over the events in buffer and find the position of the last event */
