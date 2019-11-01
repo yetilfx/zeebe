@@ -7,6 +7,9 @@
  */
 package io.zeebe.logstreams.impl;
 
+import com.netflix.concurrency.limits.limit.AbstractLimit;
+import com.netflix.concurrency.limits.limit.Gradient2Limit;
+import com.netflix.concurrency.limits.limit.GradientLimit;
 import com.netflix.concurrency.limits.limit.VegasLimit;
 import com.netflix.concurrency.limits.limit.WindowedLimit;
 import io.zeebe.dispatcher.BlockPeek;
@@ -17,7 +20,9 @@ import io.zeebe.util.Environment;
 import io.zeebe.util.sched.Actor;
 import io.zeebe.util.sched.future.ActorFuture;
 import java.nio.ByteBuffer;
+import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.Supplier;
 import org.agrona.DirectBuffer;
 import org.agrona.concurrent.UnsafeBuffer;
 import org.slf4j.Logger;
@@ -41,6 +46,7 @@ public class LogStorageAppender extends Actor {
   private long currentInFlightBytes;
   private final AppendEntryLimiter appendEntryLimiter;
   private final AppendBackpressureMetrics appendBackpressureMetrics;
+  private final Environment environment;
 
   public LogStorageAppender(
       String name,
@@ -48,10 +54,9 @@ public class LogStorageAppender extends Actor {
       Subscription writeBufferSubscription,
       int maxBlockSize) {
 
+    environment = new Environment();
     maxBytesInflight =
-        new Environment()
-            .getLong("ZEEBE_MAX_BYTES_INFLIGHT")
-            .orElse(ByteUnit.KILOBYTES.toBytes(32));
+        environment.getLong("ZEEBE_MAX_BYTES_INFLIGHT").orElse(ByteUnit.KILOBYTES.toBytes(32));
 
     LOG.info("Uses maxBytesInflight {} for backpressure.", maxBytesInflight);
     this.name = name;
@@ -63,9 +68,52 @@ public class LogStorageAppender extends Actor {
     appendBackpressureMetrics = new AppendBackpressureMetrics(partitionId);
     appendEntryLimiter =
         AppendEntryLimiter.builder()
-            .limit(WindowedLimit.newBuilder().build(VegasLimit.newDefault()))
+            .limit(WindowedLimit.newBuilder().build(buildLimit()))
             .partitionId(partitionId)
             .build();
+  }
+
+  private AbstractLimit buildLimit()
+  {
+    final String algorithm = environment.get("ZEEBE_APPEND_LIMITER").orElse("vegas");
+
+
+    final Map<String, Supplier<AbstractLimit> algorithms =
+      Map.of("vegas", this::buildVegasLimit,
+        "gradient", this::buildGradientLimit,
+        "gradient2", this::buildGradient2Limit);
+
+    Supplier<AbstractLimit> abstractLimitSupplier = algorithms.get(algorithm.toLowerCase());
+    if (abstractLimitSupplier == null)
+    {
+      abstractLimitSupplier = this::buildVegasLimit;
+    }
+
+    return abstractLimitSupplier.get();
+  }
+
+  private AbstractLimit buildVegasLimit()
+  {
+    return VegasLimit.newBuilder()
+      .initialLimit(environment.getInt("ZEEBE_INITIAL_APPEND_LIMIT").orElse(1024))
+      .maxConcurrency(environment.getInt("ZEEBE_MAX_APPEND_CONCURRENCY").orElse(1024 * 32))
+      .build();
+  }
+
+  private AbstractLimit buildGradientLimit()
+  {
+    return GradientLimit.newBuilder()
+      .initialLimit(environment.getInt("ZEEBE_INITIAL_APPEND_LIMIT").orElse(1024))
+      .maxConcurrency(environment.getInt("ZEEBE_MAX_APPEND_CONCURRENCY").orElse(1024 * 32))
+      .build();
+  }
+
+  private AbstractLimit buildGradient2Limit()
+  {
+    return Gradient2Limit.newBuilder()
+      .initialLimit(environment.getInt("ZEEBE_INITIAL_APPEND_LIMIT").orElse(1024))
+      .maxConcurrency(environment.getInt("ZEEBE_MAX_APPEND_CONCURRENCY").orElse(1024 * 32))
+      .build();
   }
 
   @Override
