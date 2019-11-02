@@ -111,7 +111,7 @@ public class LogStorageAppender extends Actor {
         .queueSize(environment.getInt("ZEEBE_APPEND_QUEUE_SIZE").orElse(32))
         .minLimit(environment.getInt("ZEEBE_MIN_APPEND_LIMIT").orElse(256))
         .longWindow(environment.getInt("ZEEBE_APPEND_LONG_WINDOW").orElse(1200))
-        //        .rttTolerance(environment.getDouble("ZEEBE_APPEND_RTT_TOLERANCE").orElse(1.5f))
+        .rttTolerance(environment.getDouble("ZEEBE_APPEND_RTT_TOLERANCE").orElse(1.5))
         .build();
   }
 
