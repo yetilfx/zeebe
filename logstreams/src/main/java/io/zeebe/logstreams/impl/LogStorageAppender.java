@@ -99,10 +99,12 @@ public class LogStorageAppender extends Actor {
      * stability at higher limits we set alpha=Max(3, 10% of the current limit) and beta=Max(6, 20% of the current limit)
      */
     return VegasLimit.newBuilder()
-        .alpha(limit -> Math.max(3, limit / 10))
-        .beta(limit -> Math.max(3, limit / 5))
+        .alpha(limit -> Math.max(3, (int) (limit * 0.7)))
+        .beta(limit -> Math.max(6, (int) (limit * 0.95f)))
         .initialLimit(environment.getInt("ZEEBE_INITIAL_APPEND_LIMIT").orElse(1024))
         .maxConcurrency(environment.getInt("ZEEBE_MAX_APPEND_CONCURRENCY").orElse(1024 * 32))
+        .increase(limit -> limit + Math.log(limit))
+        .decrease(limit -> limit - Math.log(limit))
         .build();
   }
 
