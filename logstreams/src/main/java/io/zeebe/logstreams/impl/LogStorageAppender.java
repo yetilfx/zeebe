@@ -91,7 +91,16 @@ public class LogStorageAppender extends Actor {
   }
 
   private AbstractLimit buildVegasLimit() {
+    /*
+     * Queue size is calculated using the formula,
+     *  queue_use = limit − BWE×RTTnoLoad = limit × (1 − RTTnoLoad/RTTactual)
+     *
+     * For traditional TCP Vegas alpha is typically 2-3 and beta is typically 4-6.  To allow for better growth and
+     * stability at higher limits we set alpha=Max(3, 10% of the current limit) and beta=Max(6, 20% of the current limit)
+     */
     return VegasLimit.newBuilder()
+        .alpha(limit -> Math.max(3, limit / 10))
+        .beta(limit -> Math.max(3, limit / 5))
         .initialLimit(environment.getInt("ZEEBE_INITIAL_APPEND_LIMIT").orElse(1024))
         .maxConcurrency(environment.getInt("ZEEBE_MAX_APPEND_CONCURRENCY").orElse(1024 * 32))
         .build();
