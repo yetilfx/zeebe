@@ -8,7 +8,7 @@
 package io.zeebe.broker.logstreams.delete;
 
 import io.zeebe.broker.Loggers;
-import io.zeebe.broker.exporter.stream.ExporterDirector;
+import io.zeebe.broker.exporter.ExporterDirectorService;
 import io.zeebe.logstreams.impl.delete.DeletionService;
 import io.zeebe.logstreams.log.LogStream;
 import io.zeebe.servicecontainer.Injector;
@@ -18,9 +18,9 @@ import io.zeebe.servicecontainer.ServiceStopContext;
 import io.zeebe.util.sched.future.ActorFuture;
 
 public class LeaderLogStreamDeletionService implements DeletionService, Service {
-  private final Injector<ExporterDirector> exporterDirectorInjector = new Injector<>();
+  private final Injector<ExporterDirectorService> exporterDirectorInjector = new Injector<>();
   private final LogStream logStream;
-  private ExporterDirector exporterDirector;
+  private ExporterDirectorService exporterDirector;
 
   public LeaderLogStreamDeletionService(LogStream logStream) {
     this.logStream = logStream;
@@ -55,7 +55,7 @@ public class LeaderLogStreamDeletionService implements DeletionService, Service 
         });
   }
 
-  public Injector<ExporterDirector> getExporterDirectorInjector() {
+  public Injector<ExporterDirectorService> getExporterDirectorInjector() {
     return exporterDirectorInjector;
   }
 }

@@ -14,7 +14,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import io.zeebe.broker.engine.EngineServiceNames;
-import io.zeebe.broker.exporter.stream.ExporterDirector;
+import io.zeebe.broker.exporter.ExporterDirectorService;
 import io.zeebe.logstreams.log.LogStream;
 import io.zeebe.servicecontainer.Injector;
 import io.zeebe.servicecontainer.ServiceStartContext;
@@ -32,7 +32,7 @@ public class LeaderLogStreamDeletionTest {
   private static final int PARTITION_ID = 0;
   private static final long POSITION_TO_DELETE = 6L;
   private static final long ADDRESS_TO_DELETE = 55L;
-  @Mock ExporterDirector mockExporterDirectorService;
+  @Mock ExporterDirectorService mockExporterDirectorService;
   @Mock LogStream mockLogStream = mock(LogStream.class);
   private final ActorSchedulerRule actorScheduler = new ActorSchedulerRule();
   private final ServiceContainerRule serviceContainer = new ServiceContainerRule(actorScheduler);
@@ -48,10 +48,10 @@ public class LeaderLogStreamDeletionTest {
             EngineServiceNames.leaderLogStreamDeletionService(PARTITION_ID), deletionService)
         .install()
         .join();
-    final Injector<ExporterDirector> exporterManagerInjector =
+    final Injector<ExporterDirectorService> exporterManagerInjector =
         deletionService.getExporterDirectorInjector();
 
-    mockExporterDirectorService = mock(ExporterDirector.class);
+    mockExporterDirectorService = mock(ExporterDirectorService.class);
     exporterManagerInjector.inject(mockExporterDirectorService);
     deletionService.start(mock(ServiceStartContext.class));
   }

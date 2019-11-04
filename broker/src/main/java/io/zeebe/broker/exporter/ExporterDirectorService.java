@@ -7,8 +7,6 @@
  */
 package io.zeebe.broker.exporter;
 
-import static io.zeebe.broker.exporter.ExporterServiceNames.exporterClearStateServiceName;
-
 import io.zeebe.broker.clustering.base.partitions.Partition;
 import io.zeebe.broker.exporter.repo.ExporterRepository;
 import io.zeebe.broker.exporter.stream.ExporterDirector;
@@ -17,7 +15,6 @@ import io.zeebe.broker.system.configuration.BrokerCfg;
 import io.zeebe.broker.system.configuration.DataCfg;
 import io.zeebe.db.ZeebeDb;
 import io.zeebe.logstreams.log.BufferedLogStreamReader;
-import io.zeebe.logstreams.log.LogStream;
 import io.zeebe.servicecontainer.Injector;
 import io.zeebe.servicecontainer.Service;
 import io.zeebe.servicecontainer.ServiceStartContext;
@@ -25,7 +22,7 @@ import io.zeebe.util.DurationUtil;
 import io.zeebe.util.sched.future.ActorFuture;
 import io.zeebe.util.sched.future.CompletableActorFuture;
 
-public class ExporterDirectorService implements Service<ExporterDirector> {
+public class ExporterDirectorService implements Service<ExporterDirectorService> {
 
   public static final int EXPORTER_PROCESSOR_ID = 1003;
   public static final String EXPORTER_NAME = "exporter-%d";
@@ -48,24 +45,21 @@ public class ExporterDirectorService implements Service<ExporterDirector> {
   @Override
   public void start(ServiceStartContext startContext) {
     this.startContext = startContext;
-    startContext.async(startExporter(partitionInjector.getValue()));
+    startExporter(partitionInjector.getValue(), startContext);
   }
 
   @Override
-  public ExporterDirector get() {
-    return director;
+  public ExporterDirectorService get() {
+    return this;
   }
 
-  private ActorFuture<Void> startExporter(Partition partition) {
+  private void startExporter(Partition partition, ServiceStartContext startContext) {
     final ZeebeDb zeebeDb = partition.getZeebeDb();
 
     if (exporterRepository.getExporters().isEmpty()) {
       final ExporterClearStateService clearStateService =
           new ExporterClearStateService(partition.getZeebeDb());
-      return startContext
-          .createService(
-              exporterClearStateServiceName(partition.getPartitionId()), clearStateService)
-          .install();
+      clearStateService.start();
     } else {
       final ExporterDirectorContext context =
           new ExporterDirectorContext()
@@ -78,11 +72,8 @@ public class ExporterDirectorService implements Service<ExporterDirector> {
               .logStreamReader(new BufferedLogStreamReader())
               .snapshotPeriod(DurationUtil.parse(dataCfg.getSnapshotPeriod()));
 
-      final LogStream logStream = partition.getLogStream();
-      final String logName = logStream.getLogName();
-
       director = new ExporterDirector(context);
-      return director.startAsync(startContext.getScheduler());
+      startContext.async(director.startAsync(this.startContext.getScheduler()), true);
     }
   }
 
