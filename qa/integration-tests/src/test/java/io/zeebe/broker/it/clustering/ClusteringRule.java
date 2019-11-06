@@ -40,7 +40,6 @@ import io.zeebe.servicecontainer.Injector;
 import io.zeebe.servicecontainer.ServiceContainer;
 import io.zeebe.servicecontainer.ServiceName;
 import io.zeebe.test.util.AutoCloseableRule;
-import io.zeebe.test.util.record.RecordingExporterTestWatcher;
 import io.zeebe.test.util.socket.SocketUtil;
 import io.zeebe.transport.SocketAddress;
 import io.zeebe.util.FileUtil;
@@ -68,12 +67,12 @@ import org.junit.runners.model.Statement;
 
 public class ClusteringRule extends ExternalResource {
 
-  public static final int TOPOLOGY_RETRIES = 250;
+  public static final int TOPOLOGY_RETRIES = 25_000;
   private static final AtomicLong CLUSTER_COUNT = new AtomicLong(0);
   private static final boolean ENABLE_DEBUG_EXPORTER = false;
 
-  protected final RecordingExporterTestWatcher recordingExporterTestWatcher =
-      new RecordingExporterTestWatcher();
+  //  protected final RecordingExporterTestWatcher recordingExporterTestWatcher =
+  //      new RecordingExporterTestWatcher();
 
   protected final AutoCloseableRule closeables = new AutoCloseableRule();
 
@@ -161,8 +160,8 @@ public class ClusteringRule extends ExternalResource {
 
   @Override
   public Statement apply(final Statement base, final Description description) {
-    Statement statement = recordingExporterTestWatcher.apply(base, description);
-    statement = closeables.apply(statement, description);
+    //    Statement statement = recordingExporterTestWatcher.apply(base, description);
+    final var statement = closeables.apply(base, description);
     return super.apply(statement, description);
   }
 

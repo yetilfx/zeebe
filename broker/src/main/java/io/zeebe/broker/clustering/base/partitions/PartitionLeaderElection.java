@@ -89,6 +89,7 @@ public class PartitionLeaderElection extends Actor
         if (raftRole != Role.LEADER) {
           transitionToLeader(partition.term());
         }
+        LOG.error("OnRoleChange: {} current role {}", newRole, raftRole);
         break;
       case INACTIVE:
       case PASSIVE:
@@ -99,6 +100,7 @@ public class PartitionLeaderElection extends Actor
         if (raftRole == null || raftRole == Role.LEADER) {
           transitionToFollower();
         }
+        LOG.error("OnRoleChange: {} current role {}", newRole, raftRole);
         break;
     }
 

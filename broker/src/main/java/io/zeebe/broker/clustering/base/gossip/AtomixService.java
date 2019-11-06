@@ -11,6 +11,8 @@ import io.atomix.cluster.Node;
 import io.atomix.cluster.discovery.BootstrapDiscoveryBuilder;
 import io.atomix.cluster.discovery.BootstrapDiscoveryProvider;
 import io.atomix.cluster.discovery.NodeDiscoveryProvider;
+import io.atomix.cluster.protocol.GroupMembershipProtocol;
+import io.atomix.cluster.protocol.SwimMembershipProtocol;
 import io.atomix.core.Atomix;
 import io.atomix.core.AtomixBuilder;
 import io.atomix.protocols.raft.partition.RaftPartitionGroup;
@@ -33,10 +35,12 @@ import io.zeebe.util.sched.future.CompletableActorFuture;
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ThreadLocalRandom;
 import org.slf4j.Logger;
 
 public class AtomixService implements Service<Atomix> {
@@ -66,9 +70,18 @@ public class AtomixService implements Service<Atomix> {
 
     LOG.debug("Setup atomix node in cluster {}", clusterCfg.getClusterName());
 
+    final GroupMembershipProtocol membershipProtocol =
+        SwimMembershipProtocol.builder()
+            .withFailureTimeout(Duration.ofMillis(2000))
+            .withGossipInterval(Duration.ofMillis(150))
+            .withProbeInterval(Duration.ofMillis(250))
+            .build();
+    //            .withProbeTimeout(Duration.ofMillis(2000));
+    //
     final AtomixBuilder atomixBuilder =
         Atomix.builder()
             .withClusterId(clusterCfg.getClusterName())
+            .withMembershipProtocol(membershipProtocol)
             .withMemberId(localMemberId)
             .withAddress(Address.from(host, port))
             .withMessagingPort(networkCfg.getInternalApi().getPort())
@@ -88,9 +101,14 @@ public class AtomixService implements Service<Atomix> {
       }
     }
 
+    final Duration electionTimeout =
+        Duration.ofMillis(ThreadLocalRandom.current().nextInt(250, 500));
+
     final RaftPartitionGroup systemGroup =
         RaftPartitionGroup.builder(systemPartitionName)
             .withNumPartitions(1)
+            .withElectionTimeout(electionTimeout)
+            .withHeartbeatInterval(Duration.ofMillis(50))
             .withPartitionSize(clusterCfg.getClusterSize())
             .withMembers(getRaftGroupMembers(clusterCfg))
             .withDataDirectory(systemDirectory)
@@ -143,10 +161,15 @@ public class AtomixService implements Service<Atomix> {
     final DataCfg dataCfg = configuration.getData();
     final NetworkCfg networkCfg = configuration.getNetwork();
 
+    final Duration electionTimeout =
+        Duration.ofMillis(ThreadLocalRandom.current().nextInt(250, 500));
+
     final Builder partitionGroupBuilder =
         RaftPartitionGroup.builder(raftPartitionGroupName)
             .withNumPartitions(clusterCfg.getPartitionsCount())
             .withPartitionSize(clusterCfg.getReplicationFactor())
+            .withElectionTimeout(electionTimeout)
+            .withHeartbeatInterval(Duration.ofMillis(50))
             .withMembers(getRaftGroupMembers(clusterCfg))
             .withDataDirectory(raftDirectory)
             .withFlushOnCommit();
@@ -198,7 +221,11 @@ public class AtomixService implements Service<Atomix> {
           LOG.debug("Member {} will contact node: {}", localMemberId, node.address());
           nodes.add(node);
         });
-    return builder.withNodes(nodes).build();
+    return builder
+        .withNodes(nodes)
+        .withFailureTimeout(Duration.ofMillis(1000))
+        .withHeartbeatInterval(Duration.ofMillis(100))
+        .build();
   }
 
   private ActorFuture<Void> mapCompletableFuture(final CompletableFuture<Void> atomixFuture) {
