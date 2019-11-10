@@ -9,9 +9,11 @@ package io.zeebe.gateway.impl.configuration;
 
 import static io.zeebe.gateway.impl.configuration.ConfigurationDefaults.DEFAULT_MONITORING_ENABLED;
 import static io.zeebe.gateway.impl.configuration.ConfigurationDefaults.DEFAULT_MONITORING_PORT;
+import static io.zeebe.gateway.impl.configuration.ConfigurationDefaults.DEFAULT_MONITORING_TRACING_ENABLED;
 import static io.zeebe.gateway.impl.configuration.EnvironmentConstants.ENV_GATEWAY_MONITORING_ENABLED;
 import static io.zeebe.gateway.impl.configuration.EnvironmentConstants.ENV_GATEWAY_MONITORING_HOST;
 import static io.zeebe.gateway.impl.configuration.EnvironmentConstants.ENV_GATEWAY_MONITORING_PORT;
+import static io.zeebe.gateway.impl.configuration.EnvironmentConstants.ENV_GATEWAY_MONITORING_TRACING;
 
 import io.zeebe.transport.SocketAddress;
 import io.zeebe.util.Environment;
@@ -20,14 +22,16 @@ import java.util.Objects;
 public class MonitoringCfg {
 
   private boolean enabled = DEFAULT_MONITORING_ENABLED;
+  private boolean tracing = DEFAULT_MONITORING_TRACING_ENABLED;
 
   private String host;
   private int port = DEFAULT_MONITORING_PORT;
 
-  public void init(Environment environment, String defaultHost) {
+  public void init(final Environment environment, final String defaultHost) {
     environment.getBool(ENV_GATEWAY_MONITORING_ENABLED).ifPresent(this::setEnabled);
     environment.get(ENV_GATEWAY_MONITORING_HOST).ifPresent(this::setHost);
     environment.getInt(ENV_GATEWAY_MONITORING_PORT).ifPresent(this::setPort);
+    environment.getBool(ENV_GATEWAY_MONITORING_TRACING).ifPresent(this::setTracing);
 
     if (host == null) {
       host = defaultHost;
@@ -38,7 +42,7 @@ public class MonitoringCfg {
     return enabled;
   }
 
-  public MonitoringCfg setEnabled(boolean enabled) {
+  public MonitoringCfg setEnabled(final boolean enabled) {
     this.enabled = enabled;
     return this;
   }
@@ -47,7 +51,7 @@ public class MonitoringCfg {
     return host;
   }
 
-  public MonitoringCfg setHost(String host) {
+  public MonitoringCfg setHost(final String host) {
     this.host = host;
     return this;
   }
@@ -56,7 +60,7 @@ public class MonitoringCfg {
     return port;
   }
 
-  public MonitoringCfg setPort(int port) {
+  public MonitoringCfg setPort(final int port) {
     this.port = port;
     return this;
   }
@@ -65,13 +69,21 @@ public class MonitoringCfg {
     return new SocketAddress(host, port);
   }
 
-  @Override
-  public int hashCode() {
-    return Objects.hash(enabled, host, port);
+  public boolean isTracing() {
+    return tracing;
+  }
+
+  public void setTracing(final boolean tracing) {
+    this.tracing = tracing;
   }
 
   @Override
-  public boolean equals(Object o) {
+  public int hashCode() {
+    return Objects.hash(enabled, tracing, host, port);
+  }
+
+  @Override
+  public boolean equals(final Object o) {
     if (this == o) {
       return true;
     }
@@ -79,7 +91,10 @@ public class MonitoringCfg {
       return false;
     }
     final MonitoringCfg that = (MonitoringCfg) o;
-    return enabled == that.enabled && port == that.port && Objects.equals(host, that.host);
+    return enabled == that.enabled
+        && tracing == that.tracing
+        && port == that.port
+        && Objects.equals(host, that.host);
   }
 
   @Override
@@ -92,6 +107,8 @@ public class MonitoringCfg {
         + '\''
         + ", port="
         + port
+        + ", tracing="
+        + tracing
         + '}';
   }
 }

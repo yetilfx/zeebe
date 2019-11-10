@@ -11,6 +11,8 @@ import io.atomix.cluster.AtomixCluster;
 import io.atomix.cluster.ClusterMembershipEvent;
 import io.atomix.cluster.ClusterMembershipEvent.Type;
 import io.atomix.cluster.messaging.Subscription;
+import io.opentracing.Tracer;
+import io.opentracing.noop.NoopTracerFactory;
 import io.zeebe.dispatcher.Dispatcher;
 import io.zeebe.dispatcher.Dispatchers;
 import io.zeebe.gateway.Loggers;
@@ -57,16 +59,28 @@ public class BrokerClientImpl implements BrokerClient {
   private Subscription jobAvailableSubscription;
 
   public BrokerClientImpl(final GatewayCfg configuration, final AtomixCluster atomixCluster) {
-    this(configuration, atomixCluster, null);
+    this(configuration, atomixCluster, NoopTracerFactory.create());
+  }
+
+  public BrokerClientImpl(
+      final GatewayCfg configuration, final AtomixCluster atomixCluster, final Tracer tracer) {
+    this(configuration, atomixCluster, tracer, null);
+  }
+
+  public BrokerClientImpl(
+      final GatewayCfg configuration, final AtomixCluster atomixCluster, final ActorClock clock) {
+    this(configuration, atomixCluster, NoopTracerFactory.create(), clock);
   }
 
   public BrokerClientImpl(
       final GatewayCfg configuration,
       final AtomixCluster atomixCluster,
+      final Tracer tracer,
       final ActorClock actorClock) {
     this(
         configuration,
         atomixCluster,
+        tracer,
         ActorScheduler.newActorScheduler()
             .setCpuBoundActorThreadCount(configuration.getThreads().getManagementThreads())
             .setIoBoundActorThreadCount(0)
@@ -79,6 +93,7 @@ public class BrokerClientImpl implements BrokerClient {
   public BrokerClientImpl(
       final GatewayCfg configuration,
       final AtomixCluster atomixCluster,
+      final Tracer tracer,
       final ActorScheduler actorScheduler,
       final boolean ownsActorScheduler) {
     this.atomixCluster = atomixCluster;
@@ -127,7 +142,8 @@ public class BrokerClientImpl implements BrokerClient {
             transport.getOutput(),
             topologyManager,
             new RoundRobinDispatchStrategy(topologyManager),
-            clusterCfg.getRequestTimeout());
+            clusterCfg.getRequestTimeout(),
+            tracer);
     actorScheduler.submitActor(requestManager);
   }
 
@@ -193,16 +209,16 @@ public class BrokerClientImpl implements BrokerClient {
 
   @Override
   public <T> ActorFuture<BrokerResponse<T>> sendRequest(
-      BrokerRequest<T> request, Duration requestTimeout) {
+      final BrokerRequest<T> request, final Duration requestTimeout) {
     return requestManager.sendRequest(request, requestTimeout);
   }
 
   @Override
   public <T> void sendRequest(
-      BrokerRequest<T> request,
-      BrokerResponseConsumer<T> responseConsumer,
-      Consumer<Throwable> throwableConsumer,
-      Duration requestTimeout) {
+      final BrokerRequest<T> request,
+      final BrokerResponseConsumer<T> responseConsumer,
+      final Consumer<Throwable> throwableConsumer,
+      final Duration requestTimeout) {
     requestManager.sendRequest(request, responseConsumer, throwableConsumer, requestTimeout);
   }
 

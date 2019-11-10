@@ -10,17 +10,24 @@ package io.zeebe.gateway;
 import io.atomix.cluster.AtomixCluster;
 import io.grpc.Server;
 import io.grpc.ServerBuilder;
+import io.grpc.ServerInterceptor;
 import io.grpc.ServerInterceptors;
 import io.grpc.netty.NettyServerBuilder;
+import io.opentracing.Tracer;
+import io.opentracing.contrib.grpc.TracingServerInterceptor;
+import io.opentracing.noop.NoopTracerFactory;
 import io.zeebe.gateway.impl.broker.BrokerClient;
+import io.zeebe.gateway.impl.broker.BrokerClientFactory;
 import io.zeebe.gateway.impl.broker.BrokerClientImpl;
 import io.zeebe.gateway.impl.configuration.GatewayCfg;
 import io.zeebe.gateway.impl.configuration.SecurityCfg;
 import io.zeebe.gateway.impl.job.LongPollingActivateJobsHandler;
+import io.zeebe.protocol.impl.tracing.SbeTracingCodec;
 import io.zeebe.util.sched.ActorScheduler;
 import java.io.File;
 import java.io.IOException;
 import java.net.InetSocketAddress;
+import java.util.ArrayList;
 import java.util.function.Function;
 import me.dinowernli.grpc.prometheus.Configuration;
 import me.dinowernli.grpc.prometheus.MonitoringServerInterceptor;
@@ -41,7 +48,7 @@ public class Gateway {
   }
 
   private final Function<GatewayCfg, ServerBuilder> serverBuilderFactory;
-  private final Function<GatewayCfg, BrokerClient> brokerClientFactory;
+  private final BrokerClientFactory clientFactory;
   private final GatewayCfg gatewayCfg;
   private final ActorScheduler actorScheduler;
 
@@ -49,28 +56,30 @@ public class Gateway {
   private BrokerClient brokerClient;
 
   public Gateway(
-      GatewayCfg gatewayCfg, AtomixCluster atomixCluster, ActorScheduler actorScheduler) {
+      final GatewayCfg gatewayCfg,
+      final AtomixCluster atomixCluster,
+      final ActorScheduler actorScheduler) {
     this(
         gatewayCfg,
-        cfg -> new BrokerClientImpl(cfg, atomixCluster),
-        DEFAULT_SERVER_BUILDER_FACTORY,
-        actorScheduler);
+        actorScheduler,
+        (cfg, tracer) -> new BrokerClientImpl(cfg, atomixCluster, tracer),
+        DEFAULT_SERVER_BUILDER_FACTORY);
   }
 
   public Gateway(
-      GatewayCfg gatewayCfg,
-      Function<GatewayCfg, BrokerClient> brokerClientFactory,
-      ActorScheduler actorScheduler) {
-    this(gatewayCfg, brokerClientFactory, DEFAULT_SERVER_BUILDER_FACTORY, actorScheduler);
+      final GatewayCfg gatewayCfg,
+      final ActorScheduler actorScheduler,
+      final BrokerClientFactory clientFactory) {
+    this(gatewayCfg, actorScheduler, clientFactory, DEFAULT_SERVER_BUILDER_FACTORY);
   }
 
   public Gateway(
-      GatewayCfg gatewayCfg,
-      Function<GatewayCfg, BrokerClient> brokerClientFactory,
-      Function<GatewayCfg, ServerBuilder> serverBuilderFactory,
-      ActorScheduler actorScheduler) {
+      final GatewayCfg gatewayCfg,
+      final ActorScheduler actorScheduler,
+      final BrokerClientFactory clientFactory,
+      final Function<GatewayCfg, ServerBuilder> serverBuilderFactory) {
     this.gatewayCfg = gatewayCfg;
-    this.brokerClientFactory = brokerClientFactory;
+    this.clientFactory = clientFactory;
     this.serverBuilderFactory = serverBuilderFactory;
     this.actorScheduler = actorScheduler;
   }
@@ -87,23 +96,31 @@ public class Gateway {
     LOG.info("Version: {}", VERSION);
     LOG.info("Starting gateway with configuration {}", gatewayCfg.toJson());
 
-    brokerClient = buildBrokerClient();
+    final var interceptors = new ArrayList<ServerInterceptor>();
+    Tracer tracer = NoopTracerFactory.create();
+    if (gatewayCfg.getMonitoring().isEnabled()) {
+      interceptors.add(MonitoringServerInterceptor.create(Configuration.allMetrics()));
+
+      if (gatewayCfg.getMonitoring().isTracing()) {
+        tracer =
+            io.jaegertracing.Configuration.fromEnv("io.zeebe.gateway")
+                .getTracerBuilder()
+                .registerInjector(SbeTracingCodec.format(), SbeTracingCodec.codec())
+                .registerExtractor(SbeTracingCodec.format(), SbeTracingCodec.codec())
+                .build();
+        interceptors.add(
+            TracingServerInterceptor.newBuilder().withTracer(tracer).withStreaming().build());
+      }
+    }
+
+    brokerClient = buildBrokerClient(tracer);
 
     final LongPollingActivateJobsHandler longPollingHandler = buildLongPollingHandler(brokerClient);
     actorScheduler.submitActor(longPollingHandler);
 
     final EndpointManager endpointManager = new EndpointManager(brokerClient, longPollingHandler);
-
     final ServerBuilder serverBuilder = serverBuilderFactory.apply(gatewayCfg);
-
-    if (gatewayCfg.getMonitoring().isEnabled()) {
-      final MonitoringServerInterceptor monitoringInterceptor =
-          MonitoringServerInterceptor.create(Configuration.allMetrics());
-      serverBuilder.addService(
-          ServerInterceptors.intercept(endpointManager, monitoringInterceptor));
-    } else {
-      serverBuilder.addService(endpointManager);
-    }
+    serverBuilder.addService(ServerInterceptors.intercept(endpointManager, interceptors));
 
     final SecurityCfg securityCfg = gatewayCfg.getSecurity();
 
@@ -149,11 +166,11 @@ public class Gateway {
     serverBuilder.useTransportSecurity(certChain, privateKey);
   }
 
-  protected BrokerClient buildBrokerClient() {
-    return brokerClientFactory.apply(gatewayCfg);
+  private BrokerClient buildBrokerClient(final Tracer tracer) {
+    return clientFactory.newClient(gatewayCfg, tracer);
   }
 
-  protected LongPollingActivateJobsHandler buildLongPollingHandler(BrokerClient brokerClient) {
+  private LongPollingActivateJobsHandler buildLongPollingHandler(final BrokerClient brokerClient) {
     return LongPollingActivateJobsHandler.newBuilder().setBrokerClient(brokerClient).build();
   }
 
@@ -167,7 +184,8 @@ public class Gateway {
       server.shutdownNow();
       try {
         server.awaitTermination();
-      } catch (InterruptedException e) {
+      } catch (final InterruptedException e) {
+        Thread.currentThread().interrupt();
         LOG.error("Failed to await termination of gateway", e);
       } finally {
         server = null;

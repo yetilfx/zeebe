@@ -7,6 +7,9 @@
  */
 package io.zeebe.gateway.impl.broker;
 
+import io.opentracing.Span;
+import io.opentracing.Tracer;
+import io.opentracing.contrib.grpc.OpenTracingContextKey;
 import io.zeebe.gateway.cmd.BrokerErrorException;
 import io.zeebe.gateway.cmd.BrokerRejectionException;
 import io.zeebe.gateway.cmd.BrokerResponseException;
@@ -44,16 +47,19 @@ public class BrokerRequestManager extends Actor {
   private final RequestDispatchStrategy dispatchStrategy;
   private final BrokerTopologyManagerImpl topologyManager;
   private final Duration requestTimeout;
+  private final Tracer tracer;
 
   public BrokerRequestManager(
-      ClientOutput clientOutput,
-      BrokerTopologyManagerImpl topologyManager,
-      RequestDispatchStrategy dispatchStrategy,
-      Duration requestTimeout) {
+      final ClientOutput clientOutput,
+      final BrokerTopologyManagerImpl topologyManager,
+      final RequestDispatchStrategy dispatchStrategy,
+      final Duration requestTimeout,
+      final Tracer tracer) {
     this.clientOutput = clientOutput;
     this.dispatchStrategy = dispatchStrategy;
     this.topologyManager = topologyManager;
     this.requestTimeout = requestTimeout;
+    this.tracer = tracer;
   }
 
   private static boolean shouldRetryRequest(final DirectBuffer responseContent) {
@@ -75,12 +81,12 @@ public class BrokerRequestManager extends Actor {
     }
   }
 
-  public <T> ActorFuture<BrokerResponse<T>> sendRequest(BrokerRequest<T> request) {
+  public <T> ActorFuture<BrokerResponse<T>> sendRequest(final BrokerRequest<T> request) {
     return sendRequest(request, this.requestTimeout);
   }
 
   public <T> ActorFuture<BrokerResponse<T>> sendRequest(
-      BrokerRequest<T> request, Duration requestTimeout) {
+      final BrokerRequest<T> request, final Duration requestTimeout) {
     final ActorFuture<BrokerResponse<T>> responseFuture = new CompletableActorFuture<>();
 
     sendRequest(
@@ -98,17 +104,17 @@ public class BrokerRequestManager extends Actor {
   }
 
   public <T> void sendRequest(
-      BrokerRequest<T> request,
-      BrokerResponseConsumer<T> responseConsumer,
-      Consumer<Throwable> throwableConsumer) {
+      final BrokerRequest<T> request,
+      final BrokerResponseConsumer<T> responseConsumer,
+      final Consumer<Throwable> throwableConsumer) {
     sendRequest(request, responseConsumer, throwableConsumer, this.requestTimeout);
   }
 
   public <T> void sendRequest(
-      BrokerRequest<T> request,
-      BrokerResponseConsumer<T> responseConsumer,
-      Consumer<Throwable> throwableConsumer,
-      Duration requestTimeout) {
+      final BrokerRequest<T> request,
+      final BrokerResponseConsumer<T> responseConsumer,
+      final Consumer<Throwable> throwableConsumer,
+      final Duration requestTimeout) {
     sendRequest(
         request,
         responseConsumer,
@@ -119,12 +125,12 @@ public class BrokerRequestManager extends Actor {
   }
 
   private <T> void sendRequest(
-      BrokerRequest<T> request,
-      BrokerResponseConsumer<T> responseConsumer,
-      Consumer<BrokerRejection> rejectionConsumer,
-      Consumer<BrokerError> errorConsumer,
-      Consumer<Throwable> throwableConsumer,
-      Duration requestTimeout) {
+      final BrokerRequest<T> request,
+      final BrokerResponseConsumer<T> responseConsumer,
+      final Consumer<BrokerRejection> rejectionConsumer,
+      final Consumer<BrokerError> errorConsumer,
+      final Consumer<Throwable> throwableConsumer,
+      final Duration requestTimeout) {
 
     sendRequest(
         request,
@@ -145,7 +151,7 @@ public class BrokerRequestManager extends Actor {
             } else {
               throwableConsumer.accept(error);
             }
-          } catch (RuntimeException e) {
+          } catch (final RuntimeException e) {
             throwableConsumer.accept(new BrokerResponseException(e));
           }
         },
@@ -153,18 +159,28 @@ public class BrokerRequestManager extends Actor {
   }
 
   private <T> void sendRequest(
-      BrokerRequest<T> request,
-      BiConsumer<BrokerResponse<T>, Throwable> responseConsumer,
-      Duration requestTimeout) {
+      final BrokerRequest<T> request,
+      final BiConsumer<BrokerResponse<T>, Throwable> responseConsumer,
+      final Duration requestTimeout) {
     request.serializeValue();
     actor.run(() -> sendRequestInternal(request, responseConsumer, requestTimeout));
   }
 
   private <T> void sendRequestInternal(
-      BrokerRequest<T> request,
-      BiConsumer<BrokerResponse<T>, Throwable> responseConsumer,
-      Duration requestTimeout) {
+      final BrokerRequest<T> request,
+      final BiConsumer<BrokerResponse<T>, Throwable> responseConsumer,
+      final Duration requestTimeout) {
     final BrokerNodeIdProvider nodeIdProvider = determineBrokerNodeIdProvider(request);
+
+    final var span =
+        tracer
+            .buildSpan("io.zeebe.commandApi.request")
+            .withTag("span.kind", "client")
+            .withTag("component", "io.zeebe.gateway")
+            .withTag("message_bus.destination", request.getPartitionId())
+            .asChildOf(request.getActiveSpan())
+            .start();
+    request.injectTrace(tracer, span.context());
 
     final ActorFuture<ClientResponse> responseFuture =
         clientOutput.sendRequestWithRetry(
@@ -174,6 +190,7 @@ public class BrokerRequestManager extends Actor {
       actor.runOnCompletion(
           responseFuture,
           (clientResponse, error) -> {
+            span.finish();
             try {
               if (error == null) {
                 final BrokerResponse<T> response = request.getResponse(clientResponse);
@@ -181,16 +198,17 @@ public class BrokerRequestManager extends Actor {
               } else {
                 responseConsumer.accept(null, error);
               }
-            } catch (RuntimeException e) {
+            } catch (final RuntimeException e) {
               responseConsumer.accept(null, new ClientResponseException(e));
             }
           });
     } else {
+      span.setTag("error", true).finish();
       responseConsumer.accept(null, new ClientOutOfMemoryException());
     }
   }
 
-  private BrokerNodeIdProvider determineBrokerNodeIdProvider(BrokerRequest<?> request) {
+  private BrokerNodeIdProvider determineBrokerNodeIdProvider(final BrokerRequest<?> request) {
     if (request.addressesSpecificPartition()) {
       // already know partition id
       return new BrokerNodeIdProvider(request.getPartitionId());
@@ -215,7 +233,8 @@ public class BrokerRequestManager extends Actor {
     }
   }
 
-  private void determinePartitionIdForPublishMessageRequest(BrokerPublishMessageRequest request) {
+  private void determinePartitionIdForPublishMessageRequest(
+      final BrokerPublishMessageRequest request) {
     final BrokerClusterState topology = topologyManager.getTopology();
     if (topology != null) {
       final int partitionsCount = topology.getPartitionsCount();

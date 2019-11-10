@@ -30,6 +30,9 @@
 
 # ----------------------------------------------------
 
+[monitoring]
+# Tracing controls whether or not Zeebe will collect distributed traces using OpenTracing.
+# tracing = false
 
 [gateway]
 # Enable the embedded gateway to start on broker startup.
@@ -70,6 +73,8 @@
 [gateway.monitoring]
 # Enables the metrics collection in the gateway
 # enabled = false
+# Tracing controls whether or not Zeebe will collect distributed traces using OpenTracing.
+# tracing = false
 
 [gateway.security]
 # Enables TLS authentication between clients and the gateway
