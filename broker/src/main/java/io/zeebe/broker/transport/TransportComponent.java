@@ -11,6 +11,8 @@ import static io.zeebe.broker.clustering.base.ClusterBaseLayerServiceNames.LEADE
 import static io.zeebe.broker.transport.TransportServiceNames.COMMAND_API_SERVER_NAME;
 import static io.zeebe.broker.transport.TransportServiceNames.COMMAND_API_SERVICE_NAME;
 
+import io.jaegertracing.Configuration;
+import io.opentracing.Tracer;
 import io.zeebe.broker.system.Component;
 import io.zeebe.broker.system.SystemContext;
 import io.zeebe.broker.system.configuration.BackpressureCfg;
@@ -18,6 +20,9 @@ import io.zeebe.broker.system.configuration.NetworkCfg;
 import io.zeebe.broker.transport.backpressure.PartitionAwareRequestLimiter;
 import io.zeebe.broker.transport.commandapi.CommandApiMessageHandler;
 import io.zeebe.broker.transport.commandapi.CommandApiService;
+import io.zeebe.broker.transport.commandapi.CommandTracer;
+import io.zeebe.broker.transport.commandapi.DefaultCommandTracer;
+import io.zeebe.protocol.impl.tracing.SbeTracingCodec;
 import io.zeebe.servicecontainer.ServiceContainer;
 import io.zeebe.transport.ServerTransport;
 import io.zeebe.transport.SocketAddress;
@@ -43,11 +48,23 @@ public class TransportComponent implements Component {
   private void createSocketBindings(final SystemContext context) {
     final NetworkCfg networkCfg = context.getBrokerConfiguration().getNetwork();
     final ServiceContainer serviceContainer = context.getServiceContainer();
+    CommandTracer commandTracer = new CommandTracer.NoopCommandTracer();
 
-    final CommandApiMessageHandler commandApiMessageHandler = new CommandApiMessageHandler();
+    if (context.getBrokerConfiguration().getMonitoring().isTracing()) {
+      final Tracer tracer =
+          Configuration.fromEnv("io.zeebe.broker")
+              .getTracerBuilder()
+              .registerInjector(SbeTracingCodec.format(), SbeTracingCodec.codec())
+              .registerExtractor(SbeTracingCodec.format(), SbeTracingCodec.codec())
+              .build();
+      commandTracer = new DefaultCommandTracer(tracer);
+    }
+
+    final CommandApiMessageHandler commandApiMessageHandler =
+        new CommandApiMessageHandler(commandTracer);
     final PartitionAwareRequestLimiter limiter = createPartitionRequestLimiter(context);
     final CommandApiService commandHandler =
-        new CommandApiService(commandApiMessageHandler, limiter);
+        new CommandApiService(commandApiMessageHandler, limiter, commandTracer);
     serviceContainer
         .createService(COMMAND_API_SERVICE_NAME, commandHandler)
         .dependency(

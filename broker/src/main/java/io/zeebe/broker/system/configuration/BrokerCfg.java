@@ -22,6 +22,7 @@ public class BrokerCfg {
   private List<ExporterCfg> exporters = new ArrayList<>();
   private EmbeddedGatewayCfg gateway = new EmbeddedGatewayCfg();
   private BackpressureCfg backpressure = new BackpressureCfg();
+  private MonitoringCfg monitoring = new MonitoringCfg();
 
   public void init(final String brokerBase) {
     init(brokerBase, new Environment());
@@ -36,6 +37,7 @@ public class BrokerCfg {
     exporters.forEach(e -> e.init(this, brokerBase, environment));
     gateway.init(this, brokerBase, environment);
     backpressure.init(this, brokerBase, environment);
+    monitoring.init(this, brokerBase, environment);
   }
 
   private void applyEnvironment(final Environment environment) {
@@ -90,7 +92,7 @@ public class BrokerCfg {
     return gateway;
   }
 
-  public BrokerCfg setGateway(EmbeddedGatewayCfg gateway) {
+  public BrokerCfg setGateway(final EmbeddedGatewayCfg gateway) {
     this.gateway = gateway;
     return this;
   }
@@ -99,8 +101,17 @@ public class BrokerCfg {
     return backpressure;
   }
 
-  public BrokerCfg setBackpressure(BackpressureCfg backpressure) {
+  public BrokerCfg setBackpressure(final BackpressureCfg backpressure) {
     this.backpressure = backpressure;
+    return this;
+  }
+
+  public MonitoringCfg getMonitoring() {
+    return monitoring;
+  }
+
+  public BrokerCfg setMonitoring(final MonitoringCfg monitoring) {
+    this.monitoring = monitoring;
     return this;
   }
 
@@ -119,6 +130,8 @@ public class BrokerCfg {
         + exporters
         + ", gateway="
         + gateway
+        + ", monitoring="
+        + monitoring
         + '}';
   }
 

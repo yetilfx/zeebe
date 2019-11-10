@@ -29,12 +29,16 @@ public class CommandApiService implements Service<CommandApiService> {
   private final Injector<ServerTransport> serverTransportInjector = new Injector<>();
   private final CommandApiMessageHandler service;
   private final PartitionAwareRequestLimiter limiter;
+  private final CommandTracer tracer;
   private ServerOutput serverOutput;
 
   public CommandApiService(
-      CommandApiMessageHandler commandApiMessageHandler, PartitionAwareRequestLimiter limiter) {
+      final CommandApiMessageHandler commandApiMessageHandler,
+      final PartitionAwareRequestLimiter limiter,
+      final CommandTracer tracer) {
     this.limiter = limiter;
     this.service = commandApiMessageHandler;
+    this.tracer = tracer;
     leaderPartitionsGroupReference =
         ServiceGroupReference.<Partition>create()
             .onAdd(this::addPartition)
@@ -43,7 +47,7 @@ public class CommandApiService implements Service<CommandApiService> {
   }
 
   @Override
-  public void start(ServiceStartContext startContext) {
+  public void start(final ServiceStartContext startContext) {
     serverOutput = serverTransportInjector.getValue().getOutput();
   }
 
@@ -53,7 +57,7 @@ public class CommandApiService implements Service<CommandApiService> {
   }
 
   public CommandResponseWriter newCommandResponseWriter() {
-    return new CommandResponseWriterImpl(serverOutput);
+    return new CommandResponseWriterImpl(serverOutput, tracer);
   }
 
   public ServiceGroupReference<Partition> getLeaderParitionsGroupReference() {
@@ -68,17 +72,19 @@ public class CommandApiService implements Service<CommandApiService> {
     return service;
   }
 
-  private void removePartition(ServiceName<Partition> partitionServiceName, Partition partition) {
+  private void removePartition(
+      final ServiceName<Partition> partitionServiceName, final Partition partition) {
     limiter.removePartition(partition.getPartitionId());
     service.removePartition(partition.getLogStream());
   }
 
-  private void addPartition(ServiceName<Partition> partitionServiceName, Partition partition) {
+  private void addPartition(
+      final ServiceName<Partition> partitionServiceName, final Partition partition) {
     limiter.addPartition(partition.getPartitionId());
     service.addPartition(partition.getLogStream(), limiter.getLimiter(partition.getPartitionId()));
   }
 
-  public Consumer<TypedRecord> getOnProcessedListener(int partitionId) {
+  public Consumer<TypedRecord> getOnProcessedListener(final int partitionId) {
     final RequestLimiter<Intent> partitionLimiter = limiter.getLimiter(partitionId);
     return typedRecord -> {
       if (typedRecord.getRecordType() == RecordType.COMMAND && typedRecord.hasRequestMetadata()) {

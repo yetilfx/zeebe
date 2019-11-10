@@ -10,15 +10,13 @@ package io.zeebe.broker.clustering.base;
 import io.atomix.cluster.AtomixCluster;
 import io.zeebe.broker.system.configuration.BrokerCfg;
 import io.zeebe.gateway.Gateway;
-import io.zeebe.gateway.impl.broker.BrokerClient;
+import io.zeebe.gateway.impl.broker.BrokerClientFactory;
 import io.zeebe.gateway.impl.broker.BrokerClientImpl;
-import io.zeebe.gateway.impl.configuration.GatewayCfg;
 import io.zeebe.servicecontainer.Injector;
 import io.zeebe.servicecontainer.Service;
 import io.zeebe.servicecontainer.ServiceStartContext;
 import io.zeebe.servicecontainer.ServiceStopContext;
 import java.io.IOException;
-import java.util.function.Function;
 
 public class EmbeddedGatewayService implements Service<Gateway> {
 
@@ -27,22 +25,23 @@ public class EmbeddedGatewayService implements Service<Gateway> {
 
   private Gateway gateway;
 
-  public EmbeddedGatewayService(BrokerCfg configuration) {
+  public EmbeddedGatewayService(final BrokerCfg configuration) {
     this.configuration = configuration;
   }
 
   @Override
-  public void start(ServiceStartContext startContext) {
+  public void start(final ServiceStartContext startContext) {
     final AtomixCluster atomix = atomixClusterInjector.getValue();
-    final Function<GatewayCfg, BrokerClient> brokerClientFactory =
-        cfg -> new BrokerClientImpl(cfg, atomix, startContext.getScheduler(), false);
+    final BrokerClientFactory brokerClientFactory =
+        (config, tracer) ->
+            new BrokerClientImpl(config, atomix, tracer, startContext.getScheduler(), false);
     gateway =
-        new Gateway(configuration.getGateway(), brokerClientFactory, startContext.getScheduler());
+        new Gateway(configuration.getGateway(), startContext.getScheduler(), brokerClientFactory);
     startContext.run(this::startGateway);
   }
 
   @Override
-  public void stop(ServiceStopContext stopContext) {
+  public void stop(final ServiceStopContext stopContext) {
     if (gateway != null) {
       stopContext.run(gateway::stop);
     }

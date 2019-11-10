@@ -10,11 +10,13 @@ package io.zeebe.broker.transport.commandapi;
 import io.zeebe.broker.Loggers;
 import io.zeebe.broker.transport.backpressure.BackpressureMetrics;
 import io.zeebe.broker.transport.backpressure.RequestLimiter;
+import io.zeebe.broker.transport.commandapi.CommandTracer.NoopCommandTracer;
 import io.zeebe.logstreams.log.LogStream;
 import io.zeebe.logstreams.log.LogStreamRecordWriter;
 import io.zeebe.logstreams.log.LogStreamWriterImpl;
 import io.zeebe.msgpack.UnpackedObject;
 import io.zeebe.protocol.Protocol;
+import io.zeebe.protocol.impl.encoding.ExecuteCommandRequest;
 import io.zeebe.protocol.impl.record.RecordMetadata;
 import io.zeebe.protocol.impl.record.value.deployment.DeploymentRecord;
 import io.zeebe.protocol.impl.record.value.incident.IncidentRecord;
@@ -43,26 +45,30 @@ import org.slf4j.Logger;
 public class CommandApiMessageHandler implements ServerMessageHandler, ServerRequestHandler {
   private static final Logger LOG = Loggers.TRANSPORT_LOGGER;
 
-  protected final MessageHeaderDecoder messageHeaderDecoder = new MessageHeaderDecoder();
-  protected final ExecuteCommandRequestDecoder executeCommandRequestDecoder =
-      new ExecuteCommandRequestDecoder();
-  protected final ManyToOneConcurrentLinkedQueue<Runnable> cmdQueue =
+  private final ExecuteCommandRequest requestWrapper = new ExecuteCommandRequest();
+  private final MessageHeaderDecoder messageHeaderDecoder = new MessageHeaderDecoder();
+  private final ManyToOneConcurrentLinkedQueue<Runnable> cmdQueue =
       new ManyToOneConcurrentLinkedQueue<>();
-  protected final Consumer<Runnable> cmdConsumer = Runnable::run;
-
-  protected final Int2ObjectHashMap<LogStream> leadingStreams = new Int2ObjectHashMap<>();
-  protected final Int2ObjectHashMap<RequestLimiter<Intent>> partitionLimiters =
+  private final Consumer<Runnable> cmdConsumer = Runnable::run;
+  private final Int2ObjectHashMap<LogStream> leadingStreams = new Int2ObjectHashMap<>();
+  private final Int2ObjectHashMap<RequestLimiter<Intent>> partitionLimiters =
       new Int2ObjectHashMap<>();
-  protected final RecordMetadata eventMetadata = new RecordMetadata();
-  protected final LogStreamRecordWriter logStreamWriter = new LogStreamWriterImpl();
+  private final RecordMetadata eventMetadata = new RecordMetadata();
+  private final LogStreamRecordWriter logStreamWriter = new LogStreamWriterImpl();
+  private final EnumMap<ValueType, UnpackedObject> recordsByType = new EnumMap<>(ValueType.class);
 
-  protected final ErrorResponseWriter errorResponseWriter = new ErrorResponseWriter();
-
-  protected final EnumMap<ValueType, UnpackedObject> recordsByType = new EnumMap<>(ValueType.class);
+  private final ErrorResponseWriter errorResponseWriter;
   private final BackpressureMetrics metrics;
+  private final CommandTracer tracer;
 
   public CommandApiMessageHandler() {
+    this(new NoopCommandTracer());
+  }
+
+  public CommandApiMessageHandler(final CommandTracer tracer) {
     this.metrics = new BackpressureMetrics();
+    this.tracer = tracer;
+    this.errorResponseWriter = new ErrorResponseWriter(tracer);
     initEventTypeMap();
   }
 
@@ -85,43 +91,36 @@ public class CommandApiMessageHandler implements ServerMessageHandler, ServerReq
       final DirectBuffer buffer,
       final int messageOffset,
       final int messageLength) {
-    executeCommandRequestDecoder.wrap(
-        buffer,
-        messageOffset + messageHeaderDecoder.encodedLength(),
-        messageHeaderDecoder.blockLength(),
-        messageHeaderDecoder.version());
+    requestWrapper.wrap(buffer, messageOffset, messageLength);
 
-    final int partitionId = executeCommandRequestDecoder.partitionId();
-    final long key = executeCommandRequestDecoder.key();
+    final int partitionId = requestWrapper.getPartitionId();
+    final long key = requestWrapper.getKey();
+    final ValueType eventType = requestWrapper.getValueType();
+    final Intent eventIntent = requestWrapper.getIntent();
+
+    tracer.start(
+        requestWrapper.getSpanContext(), requestAddress.getStreamId(), requestId, partitionId);
 
     final LogStream logStream = leadingStreams.get(partitionId);
-
     if (logStream == null) {
       return errorResponseWriter
           .partitionLeaderMismatch(partitionId)
           .tryWriteResponseOrLogFailure(output, requestAddress.getStreamId(), requestId);
     }
 
-    final ValueType eventType = executeCommandRequestDecoder.valueType();
-    final short intent = executeCommandRequestDecoder.intent();
     final UnpackedObject event = recordsByType.get(eventType);
-
     if (event == null) {
       return errorResponseWriter
           .unsupportedMessage(eventType.name(), recordsByType.keySet().toArray())
           .tryWriteResponseOrLogFailure(output, requestAddress.getStreamId(), requestId);
     }
 
-    final int eventOffset =
-        executeCommandRequestDecoder.limit() + ExecuteCommandRequestDecoder.valueHeaderLength();
-    final int eventLength = executeCommandRequestDecoder.valueLength();
-
     event.reset();
 
     try {
       // verify that the event / command is valid
-      event.wrap(buffer, eventOffset, eventLength);
-    } catch (RuntimeException e) {
+      event.wrap(requestWrapper.getValue(), 0, requestWrapper.getValue().capacity());
+    } catch (final RuntimeException e) {
       LOG.error("Failed to deserialize message of type {} in client API", eventType.name(), e);
 
       return errorResponseWriter
@@ -130,7 +129,6 @@ public class CommandApiMessageHandler implements ServerMessageHandler, ServerReq
     }
 
     eventMetadata.recordType(RecordType.COMMAND);
-    final Intent eventIntent = Intent.fromProtocolValue(eventType, intent);
     eventMetadata.intent(eventIntent);
     eventMetadata.valueType(eventType);
 
@@ -152,9 +150,10 @@ public class CommandApiMessageHandler implements ServerMessageHandler, ServerReq
 
     boolean written = false;
     try {
-      written = writeCommand(eventMetadata, buffer, key, logStream, eventOffset, eventLength);
+      written = writeCommand(eventMetadata, key, logStream);
     } finally {
       if (!written) {
+        tracer.finish(requestAddress.getStreamId(), requestId, true);
         limiter.onIgnore(requestAddress.getStreamId(), requestId);
       }
     }
@@ -162,12 +161,7 @@ public class CommandApiMessageHandler implements ServerMessageHandler, ServerReq
   }
 
   private boolean writeCommand(
-      RecordMetadata eventMetadata,
-      DirectBuffer buffer,
-      long key,
-      LogStream logStream,
-      int eventOffset,
-      int eventLength) {
+      final RecordMetadata eventMetadata, final long key, final LogStream logStream) {
     logStreamWriter.wrap(logStream);
 
     if (key != ExecuteCommandRequestDecoder.keyNullValue()) {
@@ -179,13 +173,13 @@ public class CommandApiMessageHandler implements ServerMessageHandler, ServerReq
     final long eventPosition =
         logStreamWriter
             .metadataWriter(eventMetadata)
-            .value(buffer, eventOffset, eventLength)
+            .value(requestWrapper.getValue(), 0, requestWrapper.getValue().capacity())
             .tryWrite();
 
     return eventPosition >= 0;
   }
 
-  public void addPartition(LogStream logStream, RequestLimiter<Intent> limiter) {
+  public void addPartition(final LogStream logStream, final RequestLimiter<Intent> limiter) {
     cmdQueue.add(
         () -> {
           leadingStreams.put(logStream.getPartitionId(), logStream);
@@ -193,7 +187,7 @@ public class CommandApiMessageHandler implements ServerMessageHandler, ServerReq
         });
   }
 
-  public void removePartition(LogStream logStream) {
+  public void removePartition(final LogStream logStream) {
     cmdQueue.add(
         () -> {
           leadingStreams.remove(logStream.getPartitionId());
