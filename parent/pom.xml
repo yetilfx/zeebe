@@ -58,6 +58,7 @@
     <version.httpcomponents>4.4.12</version.httpcomponents>
     <version.jackson>2.10.0</version.jackson>
     <version.java-grpc-prometheus>0.3.0</version.java-grpc-prometheus>
+    <version.jaeger>0.35.2</version.jaeger>
     <version.junit>4.12</version.junit>
     <version.log4j>2.12.1</version.log4j>
     <version.mockito>3.1.0</version.mockito>
@@ -66,6 +67,8 @@
     <version.netty>4.1.39.Final</version.netty>
     <version.netty-tcnative>2.0.26.Final</version.netty-tcnative>
     <version.objenesis>3.1</version.objenesis>
+    <version.opentracing>0.33.0</version.opentracing>
+    <version.opentracing.grpc>0.2.1</version.opentracing.grpc>
     <version.prometheus>0.8.0</version.prometheus>
     <version.protobuf>3.10.0</version.protobuf>
     <version.rocksdbjni>6.3.6</version.rocksdbjni>
@@ -529,6 +532,41 @@
         <version>${version.netflix.concurrency}</version>
       </dependency>
 
+      <dependency>
+        <groupId>io.opentracing</groupId>
+        <artifactId>opentracing-api</artifactId>
+        <version>${version.opentracing}</version>
+      </dependency>
+
+      <dependency>
+        <groupId>io.opentracing</groupId>
+        <artifactId>opentracing-util</artifactId>
+        <version>${version.opentracing}</version>
+      </dependency>
+
+      <dependency>
+        <groupId>io.opentracing.contrib</groupId>
+        <artifactId>opentracing-grpc</artifactId>
+        <version>${version.opentracing.grpc}</version>
+      </dependency>
+
+      <dependency>
+        <groupId>io.opentracing</groupId>
+        <artifactId>opentracing-noop</artifactId>
+        <version>${version.opentracing}</version>
+      </dependency>
+
+      <dependency>
+        <groupId>io.jaegertracing</groupId>
+        <artifactId>jaeger-client</artifactId>
+        <version>${version.jaeger}</version>
+      </dependency>
+
+      <dependency>
+        <groupId>io.jaegertracing</groupId>
+        <artifactId>jaeger-core</artifactId>
+        <version>${version.jaeger}</version>
+      </dependency>
     </dependencies>
   </dependencyManagement>
 

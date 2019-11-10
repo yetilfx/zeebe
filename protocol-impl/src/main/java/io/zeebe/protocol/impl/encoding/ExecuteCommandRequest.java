@@ -11,6 +11,7 @@ import static io.zeebe.protocol.record.ExecuteCommandRequestEncoder.keyNullValue
 import static io.zeebe.protocol.record.ExecuteCommandRequestEncoder.partitionIdNullValue;
 
 import io.zeebe.protocol.Protocol;
+import io.zeebe.protocol.impl.tracing.SbeTracingAdapter;
 import io.zeebe.protocol.record.ExecuteCommandRequestDecoder;
 import io.zeebe.protocol.record.ExecuteCommandRequestEncoder;
 import io.zeebe.protocol.record.MessageHeaderDecoder;
@@ -31,6 +32,9 @@ public class ExecuteCommandRequest implements BufferReader, BufferWriter {
   private final ExecuteCommandRequestEncoder bodyEncoder = new ExecuteCommandRequestEncoder();
   private final ExecuteCommandRequestDecoder bodyDecoder = new ExecuteCommandRequestDecoder();
   private final DirectBuffer value = new UnsafeBuffer(0, 0);
+  private final DirectBuffer spanContext = new UnsafeBuffer(0, 0);
+  private final SbeTracingAdapter spanContextAdapter = new SbeTracingAdapter(spanContext);
+
   private int partitionId;
   private long key;
   private ValueType valueType;
@@ -46,6 +50,7 @@ public class ExecuteCommandRequest implements BufferReader, BufferWriter {
     valueType = ValueType.NULL_VAL;
     intent = Intent.UNKNOWN;
     value.wrap(0, 0);
+    spanContext.wrap(0, 0);
 
     return this;
   }
@@ -54,7 +59,7 @@ public class ExecuteCommandRequest implements BufferReader, BufferWriter {
     return partitionId;
   }
 
-  public ExecuteCommandRequest setPartitionId(int partitionId) {
+  public ExecuteCommandRequest setPartitionId(final int partitionId) {
     this.partitionId = partitionId;
     return this;
   }
@@ -63,7 +68,7 @@ public class ExecuteCommandRequest implements BufferReader, BufferWriter {
     return key;
   }
 
-  public ExecuteCommandRequest setKey(long key) {
+  public ExecuteCommandRequest setKey(final long key) {
     this.key = key;
     this.partitionId = Protocol.decodePartitionId(key);
 
@@ -74,7 +79,7 @@ public class ExecuteCommandRequest implements BufferReader, BufferWriter {
     return valueType;
   }
 
-  public ExecuteCommandRequest setValueType(ValueType valueType) {
+  public ExecuteCommandRequest setValueType(final ValueType valueType) {
     this.valueType = valueType;
     return this;
   }
@@ -83,7 +88,7 @@ public class ExecuteCommandRequest implements BufferReader, BufferWriter {
     return intent;
   }
 
-  public ExecuteCommandRequest setIntent(Intent intent) {
+  public ExecuteCommandRequest setIntent(final Intent intent) {
     this.intent = intent;
     return this;
   }
@@ -92,13 +97,28 @@ public class ExecuteCommandRequest implements BufferReader, BufferWriter {
     return value;
   }
 
-  public ExecuteCommandRequest setValue(DirectBuffer buffer, int offset, int length) {
+  public ExecuteCommandRequest setValue(
+      final DirectBuffer buffer, final int offset, final int length) {
     this.value.wrap(buffer, offset, length);
     return this;
   }
 
+  public SbeTracingAdapter getSpanContextAdapter() {
+    return spanContextAdapter;
+  }
+
+  public DirectBuffer getSpanContext() {
+    return spanContext;
+  }
+
+  public ExecuteCommandRequest setSpanContext(
+      final DirectBuffer buffer, final int offset, final int length) {
+    this.spanContext.wrap(buffer, offset, length);
+    return this;
+  }
+
   @Override
-  public void wrap(DirectBuffer buffer, int offset, int length) {
+  public void wrap(final DirectBuffer buffer, int offset, final int length) {
     reset();
 
     final int frameEnd = offset + length;
@@ -121,7 +141,13 @@ public class ExecuteCommandRequest implements BufferReader, BufferWriter {
 
     value.wrap(buffer, offset, valueLength);
     offset += valueLength;
+    bodyDecoder.limit(offset);
 
+    final int spanContextLength = bodyDecoder.spanContextLength();
+    offset += ExecuteCommandRequestDecoder.spanContextHeaderLength();
+
+    spanContext.wrap(buffer, offset, spanContextLength);
+    offset += spanContextLength;
     bodyDecoder.limit(offset);
 
     assert bodyDecoder.limit() == frameEnd
@@ -137,11 +163,13 @@ public class ExecuteCommandRequest implements BufferReader, BufferWriter {
     return MessageHeaderEncoder.ENCODED_LENGTH
         + ExecuteCommandRequestEncoder.BLOCK_LENGTH
         + ExecuteCommandRequestEncoder.valueHeaderLength()
-        + value.capacity();
+        + value.capacity()
+        + ExecuteCommandRequestEncoder.spanContextHeaderLength()
+        + spanContext.capacity();
   }
 
   @Override
-  public void write(MutableDirectBuffer buffer, int offset) {
+  public void write(final MutableDirectBuffer buffer, int offset) {
     headerEncoder
         .wrap(buffer, offset)
         .blockLength(bodyEncoder.sbeBlockLength())
@@ -157,6 +185,7 @@ public class ExecuteCommandRequest implements BufferReader, BufferWriter {
         .key(key)
         .valueType(valueType)
         .intent(intent.value())
-        .putValue(value, 0, value.capacity());
+        .putValue(value, 0, value.capacity())
+        .putSpanContext(spanContext, 0, spanContext.capacity());
   }
 }
