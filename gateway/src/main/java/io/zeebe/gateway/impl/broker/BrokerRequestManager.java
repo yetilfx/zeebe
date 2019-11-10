@@ -7,9 +7,7 @@
  */
 package io.zeebe.gateway.impl.broker;
 
-import io.opentracing.Span;
 import io.opentracing.Tracer;
-import io.opentracing.contrib.grpc.OpenTracingContextKey;
 import io.zeebe.gateway.cmd.BrokerErrorException;
 import io.zeebe.gateway.cmd.BrokerRejectionException;
 import io.zeebe.gateway.cmd.BrokerResponseException;
@@ -171,16 +169,7 @@ public class BrokerRequestManager extends Actor {
       final BiConsumer<BrokerResponse<T>, Throwable> responseConsumer,
       final Duration requestTimeout) {
     final BrokerNodeIdProvider nodeIdProvider = determineBrokerNodeIdProvider(request);
-
-    final var span =
-        tracer
-            .buildSpan("io.zeebe.commandApi.request")
-            .withTag("span.kind", "client")
-            .withTag("component", "io.zeebe.gateway")
-            .withTag("message_bus.destination", request.getPartitionId())
-            .asChildOf(request.getActiveSpan())
-            .start();
-    request.injectTrace(tracer, span.context());
+    request.injectTrace(tracer);
 
     final ActorFuture<ClientResponse> responseFuture =
         clientOutput.sendRequestWithRetry(
@@ -190,7 +179,6 @@ public class BrokerRequestManager extends Actor {
       actor.runOnCompletion(
           responseFuture,
           (clientResponse, error) -> {
-            span.finish();
             try {
               if (error == null) {
                 final BrokerResponse<T> response = request.getResponse(clientResponse);
@@ -203,7 +191,6 @@ public class BrokerRequestManager extends Actor {
             }
           });
     } else {
-      span.setTag("error", true).finish();
       responseConsumer.accept(null, new ClientOutOfMemoryException());
     }
   }
