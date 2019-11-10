@@ -15,6 +15,7 @@
  */
 package io.zeebe.client;
 
+import io.opentracing.Tracer;
 import java.time.Duration;
 
 public interface ZeebeClientConfiguration {
@@ -50,4 +51,7 @@ public interface ZeebeClientConfiguration {
 
   /** @see ZeebeClientBuilder#credentialsProvider(CredentialsProvider) */
   CredentialsProvider getCredentialsProvider();
+
+  /** @see ZeebeClientBuilder#tracer(Tracer) */
+  Tracer getTracer();
 }

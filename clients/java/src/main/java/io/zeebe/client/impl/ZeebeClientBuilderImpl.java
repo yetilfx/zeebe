@@ -20,6 +20,7 @@ import static io.zeebe.client.ClientProperties.DEFAULT_MESSAGE_TIME_TO_LIVE;
 import static io.zeebe.client.ClientProperties.DEFAULT_REQUEST_TIMEOUT;
 import static io.zeebe.client.ClientProperties.USE_PLAINTEXT_CONNECTION;
 
+import io.opentracing.Tracer;
 import io.zeebe.client.ClientProperties;
 import io.zeebe.client.CredentialsProvider;
 import io.zeebe.client.ZeebeClient;
@@ -45,6 +46,7 @@ public class ZeebeClientBuilderImpl implements ZeebeClientBuilder, ZeebeClientCo
   private boolean usePlaintextConnection = false;
   private String certificatePath;
   private CredentialsProvider credentialsProvider;
+  private Tracer tracer;
 
   @Override
   public String getBrokerContactPoint() {
@@ -99,6 +101,11 @@ public class ZeebeClientBuilderImpl implements ZeebeClientBuilder, ZeebeClientCo
   @Override
   public CredentialsProvider getCredentialsProvider() {
     return credentialsProvider;
+  }
+
+  @Override
+  public Tracer getTracer() {
+    return tracer;
   }
 
   @Override
@@ -210,6 +217,12 @@ public class ZeebeClientBuilderImpl implements ZeebeClientBuilder, ZeebeClientCo
   @Override
   public ZeebeClientBuilder credentialsProvider(final CredentialsProvider credentialsProvider) {
     this.credentialsProvider = credentialsProvider;
+    return this;
+  }
+
+  @Override
+  public ZeebeClientBuilder tracer(final Tracer tracer) {
+    this.tracer = tracer;
     return this;
   }
 
