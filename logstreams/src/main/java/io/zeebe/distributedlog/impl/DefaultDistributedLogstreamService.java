@@ -199,7 +199,7 @@ public class DefaultDistributedLogstreamService
     if (commitPosition <= lastPosition) {
       // This case can happen due to raft-replay or when appender retries due to timeout or other
       // exceptions.
-      logger.trace("Rejecting append request at position {}", commitPosition);
+      logger.error("Rejecting append request at position {}", commitPosition);
       return 1; // Assume the append was successful because event was previously appended.
     }
 

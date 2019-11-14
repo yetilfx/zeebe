@@ -25,6 +25,8 @@ import io.zeebe.util.sched.Actor;
 import io.zeebe.util.sched.future.ActorFuture;
 import java.nio.ByteBuffer;
 import java.util.Map;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import org.agrona.DirectBuffer;
 import org.agrona.concurrent.UnsafeBuffer;
@@ -124,26 +126,19 @@ public class LogStorageAppender extends Actor {
   }
 
   private void appendToPrimitive(byte[] bytesToAppend, long lastEventPosition) {
-    actor.submit(
+    actor.run(
         () -> {
-          distributedLog
-              .asyncAppend(bytesToAppend, lastEventPosition)
-              .whenComplete(
-                  (appendPosition, error) -> {
-                    if (error != null) {
-                      LOG.error(
-                          "Failed to append block with last event position {}, retry.",
-                          lastEventPosition);
-                      appendToPrimitive(bytesToAppend, lastEventPosition);
-                    } else {
-                      actor.run(
-                          () -> {
-                            appendEntryLimiter.onCommit(lastEventPosition);
-                            currentInFlightBytes -= bytesToAppend.length;
-                            actor.run(this::peekBlock);
-                          });
-                    }
-                  });
+          long appendPosition = -1;
+          do {
+            try {
+              appendPosition = distributedLog.append(bytesToAppend, lastEventPosition);
+            } catch (InterruptedException | ExecutionException | TimeoutException e) {
+              LOG.error("Error on append last event position {} happend!", lastEventPosition, e);
+            }
+          } while (appendPosition < 0);
+          appendEntryLimiter.onCommit(lastEventPosition);
+          currentInFlightBytes -= bytesToAppend.length;
+          actor.run(this::peekBlock);
         });
   }
 
