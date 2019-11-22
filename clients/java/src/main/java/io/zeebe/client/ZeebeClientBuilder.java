@@ -83,6 +83,13 @@ public interface ZeebeClientBuilder {
    */
   ZeebeClientBuilder credentialsProvider(CredentialsProvider credentialsProvider);
 
+  /**
+   * Enable monitoring grpc requests via prometheus metrics
+   *
+   * @return
+   */
+  ZeebeClientBuilder withMonitoring();
+
   /** @return a new {@link ZeebeClient} with the provided configuration options. */
   ZeebeClient build();
 }

@@ -58,6 +58,7 @@ public class ZeebeClientTest extends ClientTest {
       assertThat(configuration.getDefaultJobPollInterval()).isEqualTo(Duration.ofMillis(100));
       assertThat(configuration.getDefaultMessageTimeToLive()).isEqualTo(Duration.ofHours(1));
       assertThat(configuration.getDefaultRequestTimeout()).isEqualTo(Duration.ofSeconds(20));
+      assertThat(configuration.isMonitoringEnabled()).isFalse();
     }
   }
 

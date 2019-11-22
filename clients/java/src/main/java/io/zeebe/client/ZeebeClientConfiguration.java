@@ -50,4 +50,7 @@ public interface ZeebeClientConfiguration {
 
   /** @see ZeebeClientBuilder#credentialsProvider(CredentialsProvider) */
   CredentialsProvider getCredentialsProvider();
+
+  /** @see ZeebeClientBuilder#withMonitoring() */
+  boolean isMonitoringEnabled();
 }

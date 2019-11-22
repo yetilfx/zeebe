@@ -61,6 +61,8 @@ import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
+import me.dinowernli.grpc.prometheus.Configuration;
+import me.dinowernli.grpc.prometheus.MonitoringClientInterceptor;
 
 public class ZeebeClientImpl implements ZeebeClient {
   private final ZeebeClientConfiguration config;
@@ -161,7 +163,13 @@ public class ZeebeClientImpl implements ZeebeClient {
   public static GatewayStub buildGatewayStub(
       ManagedChannel channel, ZeebeClientConfiguration config) {
     final CallCredentials credentials = buildCallCredentials(config);
-    return GatewayGrpc.newStub(channel).withCallCredentials(credentials);
+    final GatewayStub gatewayStub = GatewayGrpc.newStub(channel).withCallCredentials(credentials);
+    if (config.isMonitoringEnabled()) {
+      final MonitoringClientInterceptor monitoringInterceptor =
+          MonitoringClientInterceptor.create(Configuration.allMetrics());
+      return gatewayStub.withInterceptors(monitoringInterceptor);
+    }
+    return gatewayStub;
   }
 
   private static ScheduledExecutorService buildExecutorService(

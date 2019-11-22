@@ -18,6 +18,7 @@ package io.zeebe.client.impl;
 import static io.zeebe.client.ClientProperties.CA_CERTIFICATE_PATH;
 import static io.zeebe.client.ClientProperties.DEFAULT_MESSAGE_TIME_TO_LIVE;
 import static io.zeebe.client.ClientProperties.DEFAULT_REQUEST_TIMEOUT;
+import static io.zeebe.client.ClientProperties.MONITORING;
 import static io.zeebe.client.ClientProperties.USE_PLAINTEXT_CONNECTION;
 
 import io.zeebe.client.ClientProperties;
@@ -45,6 +46,7 @@ public class ZeebeClientBuilderImpl implements ZeebeClientBuilder, ZeebeClientCo
   private boolean usePlaintextConnection = false;
   private String certificatePath;
   private CredentialsProvider credentialsProvider;
+  private boolean monitoringEnabled = false;
 
   @Override
   public String getBrokerContactPoint() {
@@ -101,6 +103,10 @@ public class ZeebeClientBuilderImpl implements ZeebeClientBuilder, ZeebeClientCo
     return credentialsProvider;
   }
 
+  public boolean isMonitoringEnabled() {
+    return monitoringEnabled;
+  }
+
   @Override
   public ZeebeClientBuilder withProperties(final Properties properties) {
     if (properties.containsKey(ClientProperties.BROKER_CONTACTPOINT)) {
@@ -143,7 +149,9 @@ public class ZeebeClientBuilderImpl implements ZeebeClientBuilder, ZeebeClientCo
     if (properties.containsKey(CA_CERTIFICATE_PATH)) {
       caCertificatePath(properties.getProperty(CA_CERTIFICATE_PATH));
     }
-
+    if (properties.containsKey(MONITORING)) {
+      withMonitoring();
+    }
     return this;
   }
 
@@ -210,6 +218,12 @@ public class ZeebeClientBuilderImpl implements ZeebeClientBuilder, ZeebeClientCo
   @Override
   public ZeebeClientBuilder credentialsProvider(final CredentialsProvider credentialsProvider) {
     this.credentialsProvider = credentialsProvider;
+    return this;
+  }
+
+  @Override
+  public ZeebeClientBuilder withMonitoring() {
+    this.monitoringEnabled = true;
     return this;
   }
 

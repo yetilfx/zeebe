@@ -47,4 +47,7 @@ public class ClientProperties {
 
   /** @see ZeebeClientBuilder#caCertificatePath(String) */
   public static final String CA_CERTIFICATE_PATH = "zeebe.client.security.certpath";
+
+  /** @see ZeebeClientBuilder#withMonitoring() */
+  public static final String MONITORING = "zeebe.client.monitoring.enabled";
 }

@@ -136,6 +136,10 @@
       <groupId>com.fasterxml.jackson.dataformat</groupId>
       <artifactId>jackson-dataformat-yaml</artifactId>
     </dependency>
+    <dependency>
+      <groupId>me.dinowernli</groupId>
+      <artifactId>java-grpc-prometheus</artifactId>
+    </dependency>
   </dependencies>
 
   <build>
