@@ -34,6 +34,7 @@ import java.util.Properties;
 public class ZeebeClientBuilderImpl implements ZeebeClientBuilder, ZeebeClientConfiguration {
   public static final String PLAINTEXT_CONNECTION_VAR = "ZEEBE_INSECURE_CONNECTION";
   public static final String CA_CERTIFICATE_VAR = "ZEEBE_CA_CERTIFICATE_PATH";
+  public static final String CLIENT_MONITORING_ENABLED = "ZEEBE_CLIENT_MONITORING_ENABLED";
 
   private String brokerContactPoint = "0.0.0.0:26500";
   private int jobWorkerMaxJobsActive = 32;
@@ -150,7 +151,7 @@ public class ZeebeClientBuilderImpl implements ZeebeClientBuilder, ZeebeClientCo
       caCertificatePath(properties.getProperty(CA_CERTIFICATE_PATH));
     }
     if (properties.containsKey(MONITORING)) {
-      withMonitoring();
+      monitoringEnabled = properties.getProperty(MONITORING).equals("true");
     }
     return this;
   }
@@ -242,6 +243,10 @@ public class ZeebeClientBuilderImpl implements ZeebeClientBuilder, ZeebeClientCo
 
     if (Environment.system().isDefined(CA_CERTIFICATE_VAR)) {
       caCertificatePath(Environment.system().get(CA_CERTIFICATE_VAR));
+    }
+
+    if (Environment.system().isDefined(CLIENT_MONITORING_ENABLED)) {
+      monitoringEnabled = Environment.system().getBoolean(CLIENT_MONITORING_ENABLED);
     }
   }
 

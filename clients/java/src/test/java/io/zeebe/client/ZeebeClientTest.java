@@ -15,8 +15,10 @@
  */
 package io.zeebe.client;
 
+import static io.zeebe.client.ClientProperties.MONITORING;
 import static io.zeebe.client.ClientProperties.USE_PLAINTEXT_CONNECTION;
 import static io.zeebe.client.impl.ZeebeClientBuilderImpl.CA_CERTIFICATE_VAR;
+import static io.zeebe.client.impl.ZeebeClientBuilderImpl.CLIENT_MONITORING_ENABLED;
 import static io.zeebe.client.impl.ZeebeClientBuilderImpl.PLAINTEXT_CONNECTION_VAR;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -107,6 +109,39 @@ public class ZeebeClientTest extends ClientTest {
 
     // then
     assertThat(builder.isPlaintextConnectionEnabled()).isFalse();
+  }
+
+  @Test
+  public void shouldEnableMonitoringViaEnvironment() {
+    // given
+    Environment.system().put(CLIENT_MONITORING_ENABLED, "true");
+    final ZeebeClientBuilderImpl builder = new ZeebeClientBuilderImpl();
+
+    // when
+    final ZeebeClient client = builder.build();
+
+    // then
+    assertThat(builder.isMonitoringEnabled()).isTrue();
+    Environment.system().remove(CLIENT_MONITORING_ENABLED);
+    client.close();
+  }
+
+  @Test
+  public void shouldOverwriteMonitoringViaEnvironment() {
+    // given
+    Environment.system().put(CLIENT_MONITORING_ENABLED, "false");
+    final Properties properties = new Properties();
+    properties.putIfAbsent(MONITORING, "true");
+    final ZeebeClientBuilderImpl builder = new ZeebeClientBuilderImpl();
+    builder.withProperties(properties);
+
+    // when
+    final ZeebeClient client = builder.build();
+
+    // then
+    assertThat(builder.isMonitoringEnabled()).isFalse();
+    Environment.system().remove(CLIENT_MONITORING_ENABLED);
+    client.close();
   }
 
   @Test
