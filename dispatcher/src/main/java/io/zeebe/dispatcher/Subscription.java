@@ -75,6 +75,10 @@ public class Subscription implements ConsumableChannel {
     return getLimit() > getPosition();
   }
 
+  public long available() {
+    return getLimit() - getPosition();
+  }
+
   @Override
   public void registerConsumer(ActorCondition consumer) {
     actorConditions.registerConsumer(consumer);
