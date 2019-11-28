@@ -12,6 +12,7 @@ import io.zeebe.logstreams.impl.LogStorageAppender;
 import io.zeebe.logstreams.spi.LogStorage;
 import io.zeebe.util.sched.ActorCondition;
 import io.zeebe.util.sched.future.ActorFuture;
+import java.nio.ByteBuffer;
 
 /**
  * Represents a stream of events from a log storage.
