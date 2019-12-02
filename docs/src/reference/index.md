@@ -2,6 +2,7 @@
 
 This section gives in-depth explanations of Zeebe usage concepts.
 
+* [Workflow Instance Creation](/reference/workflow-instance-creation.html)
 * [Workflow Lifecycles](/reference/workflow-lifecycles.html)
 * [Variables](/reference/variables.html)
 * [Conditions](/reference/conditions.html)
